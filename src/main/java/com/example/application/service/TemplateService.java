@@ -11,9 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.io.StringWriter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,35 +25,71 @@ public class TemplateService {
         this.freemarkerConfig = freemarkerConfig;
     }
 
-    public Map<String, String> generateFilesFromDbTemplates(Project project, List<Entity> entities) {
-        List<Template> applicableTemplates = templateRepository.findApplicableTemplates(
-                project.getBuildTool(),
-                project.getProjectType(),
-                project.getFramework()
-        );
+    /**
+     * --- NEW ---
+     * Gets a preview of all file paths that would be generated for a given project.
+     * This is a lightweight operation that does not process template content.
+     */
+    public List<String> getApplicableFilePaths(Project project, List<Entity> entities) {
+        List<Template> applicableTemplates = findApplicableTemplates(project);
+        Map<String, Template> finalTemplates = resolveOverrides(applicableTemplates);
+        List<String> filePaths = new ArrayList<>();
 
+        for (Template template : finalTemplates.values()) {
+            try {
+                if (template.getPath().contains("${entity.name}")) {
+                    for (Entity entity : entities) {
+                        Map<String, Object> dataModel = createDataModel(project, entities, entity);
+                        filePaths.add(processString(template.getPath(), dataModel));
+                    }
+                } else {
+                    Map<String, Object> dataModel = createDataModel(project, entities, null);
+                    filePaths.add(processString(template.getPath(), dataModel));
+                }
+            } catch (IOException | TemplateException e) {
+                System.err.println("Error processing path for template " + template.getTemplateName() + ": " + e.getMessage());
+            }
+        }
+        return filePaths;
+    }
+
+    // --- MODIFIED: Now accepts an optional set of selected paths to filter generation ---
+    public Map<String, String> generateFilesFromDbTemplates(Project project, List<Entity> entities, Set<String> selectedPaths) {
+        List<Template> applicableTemplates = findApplicableTemplates(project);
         Map<String, Template> finalTemplates = resolveOverrides(applicableTemplates);
         Map<String, String> generatedFiles = new HashMap<>();
 
         for (Template template : finalTemplates.values()) {
-            // Check if this is a "per-entity" template by looking for a placeholder in its path.
             if (template.getPath().contains("${entity.name}")) {
-                // Process this template once for each entity.
                 for (Entity entity : entities) {
-                    processAndAddFile(generatedFiles, template, project, entities, entity);
+                    processAndAddFile(generatedFiles, template, project, entities, entity, selectedPaths);
                 }
             } else {
-                // This is a "singleton" project-level template. Process it once.
-                processAndAddFile(generatedFiles, template, project, entities, null);
+                processAndAddFile(generatedFiles, template, project, entities, null, selectedPaths);
             }
         }
         return generatedFiles;
     }
 
-    private void processAndAddFile(Map<String, String> generatedFiles, Template template, Project project, List<Entity> allEntities, Entity currentEntity) {
+    private List<Template> findApplicableTemplates(Project project) {
+        return templateRepository.findApplicableTemplates(
+                project.getBuildTool(),
+                project.getProjectType(),
+                project.getFramework()
+        );
+    }
+
+    // --- MODIFIED: Added filtering logic based on selectedPaths ---
+    private void processAndAddFile(Map<String, String> generatedFiles, Template template, Project project, List<Entity> allEntities, Entity currentEntity, Set<String> selectedPaths) {
         try {
             Map<String, Object> dataModel = createDataModel(project, allEntities, currentEntity);
             String finalPath = processString(template.getPath(), dataModel);
+
+            // If a selection is provided, only generate files that are in the set.
+            if (selectedPaths != null && !selectedPaths.contains(finalPath)) {
+                return; // Skip this file
+            }
+
             String finalContent = processString(template.getContent(), dataModel);
             generatedFiles.put(project.getName() + "/" + finalPath, finalContent);
         } catch (IOException | TemplateException e) {
@@ -64,6 +98,7 @@ public class TemplateService {
         }
     }
 
+    // ... (rest of the class is the same)
     private String processString(String stringToProcess, Map<String, Object> dataModel) throws IOException, TemplateException {
         freemarker.template.Template fmTemplate = new freemarker.template.Template("string", stringToProcess, freemarkerConfig);
         StringWriter writer = new StringWriter();
@@ -105,7 +140,6 @@ public class TemplateService {
         return score1 >= score2 ? t1 : t2;
     }
 
-    //<editor-fold desc="Inner classes and helpers">
     public static class FieldTemplateModel {
         private final String type;
         private final String camelCaseName;
@@ -151,5 +185,4 @@ public class TemplateService {
         if (s == null || s.isEmpty()) return s;
         return s.substring(0, 1).toUpperCase() + s.substring(1);
     }
-    //</editor-fold>
 }

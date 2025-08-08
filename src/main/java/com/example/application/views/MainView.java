@@ -20,18 +20,21 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.treegrid.TreeGrid;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.server.StreamResource;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Route("")
 public class MainView extends VerticalLayout {
-    // ... (fields declarations are unchanged) ...
+    //<editor-fold desc="Fields">
     private ComboBox<Project> projectSelector;
     private TextField newProjectName;
-    private ComboBox<ProjectType> projectTypeCombo; // Changed to hold ProjectType objects
+    private ComboBox<ProjectType> projectTypeCombo;
     private RadioButtonGroup<String> buildToolSelector;
     private ComboBox<String> javaVersionCombo;
     private Button saveProjectButton;
@@ -49,7 +52,8 @@ public class MainView extends VerticalLayout {
     private final ProjectTypeRepository projectTypeRepository;
     private final FrameworkRepository frameworkRepository;
     private final CodeGeneratorService codeGeneratorService;
-
+    private Button selectAndGenerateButton;
+    //</editor-fold>
 
     public MainView(EntityRepository entityRepository, ProjectRepository projectRepository,
                     ProjectTypeRepository projectTypeRepository, FrameworkRepository frameworkRepository,
@@ -92,7 +96,6 @@ public class MainView extends VerticalLayout {
 
         newProjectName = new TextField("Project Name");
 
-        // MODIFIED: Use ProjectType objects and add the listener
         projectTypeCombo = new ComboBox<>("Project Type");
         projectTypeCombo.setItems(projectTypeRepository.findAll());
         projectTypeCombo.setItemLabelGenerator(ProjectType::getName);
@@ -107,7 +110,6 @@ public class MainView extends VerticalLayout {
         javaVersionCombo.setItems("8", "11", "17", "21");
         javaVersionCombo.setPlaceholder("Select version");
 
-        // Framework combos are now created without items initially
         webFrameworkCombo = new ComboBox<>("Web Framework");
         webFrameworkCombo.setVisible(false);
         apiFrameworkCombo = new ComboBox<>("API Framework");
@@ -121,15 +123,146 @@ public class MainView extends VerticalLayout {
         projectDetailsLayout.setAlignItems(Alignment.BASELINE);
         HorizontalLayout frameworkLayout = new HorizontalLayout(webFrameworkCombo, apiFrameworkCombo, jobFrameworkCombo, toolsCombo);
         frameworkLayout.setAlignItems(Alignment.BASELINE);
+
         saveProjectButton = new Button("Save Project", e -> saveOrUpdateProject());
         downloadProjectButton = new Button("Download Project", e -> downloadProject());
+        selectAndGenerateButton = new Button("Select Files & Generate...", e -> openFileSelectionDialog());
         showGeneratedFilesButton = new Button("Show Generated Files", e -> showGeneratedFilesInNewTab());
         newProjectButton = new Button("New Project", e -> projectSelector.clear());
-        HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, showGeneratedFilesButton, newProjectButton);
+        HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, selectAndGenerateButton, showGeneratedFilesButton, newProjectButton);
+
         add(projectSelector, projectDetailsLayout, frameworkLayout, buttonLayout);
     }
 
-    // MODIFIED: Logic to dynamically filter frameworks
+    private void openFileSelectionDialog() {
+        Project selectedProject = projectSelector.getValue();
+        if (selectedProject == null) {
+            Notification.show("Please select a project first.");
+            return;
+        }
+        List<Entity> entities = entityRepository.findByProjectIdWithFields(selectedProject.getId());
+
+        // Get the preview of file paths from the service
+        List<String> filePaths = codeGeneratorService.getApplicableFilePaths(selectedProject, entities);
+        List<FileNode> rootNodes = buildFileTree(filePaths);
+
+        Dialog dialog = new Dialog();
+        dialog.setHeaderTitle("Select Files to Generate for: " + selectedProject.getName());
+        dialog.setWidth("60vw");
+        dialog.setHeight("80vh");
+
+        TreeGrid<FileNode> treeGrid = new TreeGrid<>();
+        treeGrid.setItems(rootNodes, FileNode::getChildren);
+        treeGrid.addHierarchyColumn(FileNode::getName).setHeader("File / Directory");
+
+        treeGrid.addComponentColumn(node -> {
+            Checkbox checkbox = new Checkbox(node.isSelected());
+            checkbox.addValueChangeListener(e -> {
+                node.setSelected(e.getValue());
+                propagateSelection(node, e.getValue());
+                updateParentSelection(node.getParent());
+                treeGrid.getDataProvider().refreshAll();
+            });
+            return checkbox;
+        }).setHeader("Include").setFlexGrow(0).setWidth("100px");
+
+        treeGrid.expandRecursively(rootNodes, 10);
+
+        Button generateButton = new Button("Generate Selected", e -> {
+            Set<String> selectedFilePaths = getSelectedFilePaths(rootNodes);
+            if (selectedFilePaths.isEmpty()) {
+                Notification.show("No files selected for generation.");
+                return;
+            }
+            downloadSelectedFiles(selectedProject, entities, selectedFilePaths);
+            dialog.close();
+        });
+        Button cancelButton = new Button("Cancel", e -> dialog.close());
+        dialog.getFooter().add(cancelButton, generateButton);
+
+        dialog.add(treeGrid);
+        dialog.open();
+    }
+
+    private List<FileNode> buildFileTree(List<String> paths) {
+        FileNode root = new FileNode("root", "", true, null);
+        Map<String, FileNode> nodeMap = new HashMap<>();
+        nodeMap.put("", root);
+
+        for (String path : paths) {
+            String[] parts = path.split("/");
+            FileNode currentParent = root;
+            StringBuilder currentPath = new StringBuilder();
+
+            for (int i = 0; i < parts.length; i++) {
+                currentPath.append(parts[i]);
+                boolean isDirectory = (i < parts.length - 1);
+
+                FileNode node = nodeMap.get(currentPath.toString());
+                if (node == null) {
+                    node = new FileNode(parts[i], currentPath.toString(), isDirectory, currentParent);
+                    currentParent.addChild(node);
+                    nodeMap.put(currentPath.toString(), node);
+                }
+                currentParent = node;
+                if (isDirectory) {
+                    currentPath.append("/");
+                }
+            }
+        }
+        return root.getChildren();
+    }
+
+    private void propagateSelection(FileNode node, boolean selected) {
+        node.getChildren().forEach(child -> {
+            child.setSelected(selected);
+            propagateSelection(child, selected);
+        });
+    }
+
+    private void updateParentSelection(FileNode parent) {
+        if (parent == null || parent.getName().equals("root")) {
+            return;
+        }
+        boolean allChildrenSelected = parent.getChildren().stream().allMatch(FileNode::isSelected);
+        if (parent.isSelected() != allChildrenSelected) {
+            parent.setSelected(allChildrenSelected);
+            updateParentSelection(parent.getParent());
+        }
+    }
+
+    private Set<String> getSelectedFilePaths(List<FileNode> nodes) {
+        Set<String> selectedPaths = new HashSet<>();
+        for (FileNode node : nodes) {
+            if (node.isSelected() && !node.isDirectory()) {
+                selectedPaths.add(node.getFullPath());
+            }
+            if (!node.getChildren().isEmpty()) {
+                selectedPaths.addAll(getSelectedFilePaths(node.getChildren()));
+            }
+        }
+        return selectedPaths;
+    }
+
+    private void downloadSelectedFiles(Project project, List<Entity> entities, Set<String> selectedPaths) {
+        try {
+            byte[] zipBytes = codeGeneratorService.generateAndZipProject(project, entities, selectedPaths);
+            String fileName = project.getName() + ".zip";
+
+            StreamResource resource = new StreamResource(fileName, () -> new ByteArrayInputStream(zipBytes));
+            final Anchor anchor = new Anchor(resource, "Download");
+            anchor.getElement().setAttribute("download", true);
+            anchor.getStyle().set("display", "none");
+            add(anchor);
+            anchor.getElement().executeJs("setTimeout(() => { this.click(); this.remove(); }, 0);");
+            Notification.show("Project download started...");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            Notification.show("Error generating project zip: " + e.getMessage());
+        }
+    }
+
     private void updateFrameworkCombosVisibility(ProjectType projectType) {
         webFrameworkCombo.setVisible(false);
         apiFrameworkCombo.setVisible(false);
@@ -169,7 +302,6 @@ public class MainView extends VerticalLayout {
         }
     }
 
-    // MODIFIED: Logic to handle setting the ProjectType object
     private void handleProjectSelection(Project project) {
         if (project != null) {
             newProjectName.setValue(project.getName());
@@ -177,7 +309,7 @@ public class MainView extends VerticalLayout {
             javaVersionCombo.setValue(project.getJavaVersion());
 
             projectTypeRepository.findByName(project.getProjectType()).ifPresent(pt -> {
-                projectTypeCombo.setValue(pt); // This will trigger the listener
+                projectTypeCombo.setValue(pt);
                 String framework = project.getFramework();
                 if (framework != null) {
                     switch (pt.getName()) {
@@ -196,7 +328,6 @@ public class MainView extends VerticalLayout {
         }
     }
 
-    // MODIFIED: Logic to get the project type name from the object
     private void saveOrUpdateProject() {
         String projectName = newProjectName.getValue();
         ProjectType selectedType = projectTypeCombo.getValue();
@@ -223,7 +354,7 @@ public class MainView extends VerticalLayout {
         Project projectToSave = (selectedProject != null) ? selectedProject : new Project();
 
         projectToSave.setName(projectName.trim());
-        projectToSave.setProjectType(selectedType.getName()); // Get name from object
+        projectToSave.setProjectType(selectedType.getName());
         projectToSave.setBuildTool(buildTool);
         projectToSave.setFramework(framework);
         projectToSave.setJavaVersion(javaVersion);
@@ -238,7 +369,6 @@ public class MainView extends VerticalLayout {
         }
     }
 
-    // ... The rest of MainView.java remains the same ...
     private void showGeneratedFilesInNewTab() {
         Project selectedProject = projectSelector.getValue();
         if (selectedProject == null) {
@@ -324,6 +454,7 @@ public class MainView extends VerticalLayout {
         boolean projectSelected = projectSelector.getValue() != null;
         addEntityButton.setEnabled(projectSelected);
         downloadProjectButton.setEnabled(projectSelected);
+        selectAndGenerateButton.setEnabled(projectSelected);
         showGeneratedFilesButton.setEnabled(projectSelected);
         newProjectButton.setEnabled(projectSelected);
         saveProjectButton.setEnabled(true);
