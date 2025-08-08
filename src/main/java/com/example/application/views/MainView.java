@@ -1,10 +1,6 @@
 package com.example.application.views;
 
-import com.example.application.entity.Entity;
-import com.example.application.entity.Field;
-import com.example.application.entity.Framework;
-import com.example.application.entity.Project;
-import com.example.application.entity.ProjectType;
+import com.example.application.entity.*;
 import com.example.application.repository.EntityRepository;
 import com.example.application.repository.FrameworkRepository;
 import com.example.application.repository.ProjectRepository;
@@ -32,33 +28,28 @@ import java.util.stream.Collectors;
 
 @Route("")
 public class MainView extends VerticalLayout {
-    // Project components
+    // ... (fields declarations are unchanged) ...
     private ComboBox<Project> projectSelector;
     private TextField newProjectName;
-    private ComboBox<String> projectTypeCombo;
+    private ComboBox<ProjectType> projectTypeCombo; // Changed to hold ProjectType objects
     private RadioButtonGroup<String> buildToolSelector;
     private ComboBox<String> javaVersionCombo;
     private Button saveProjectButton;
     private Button downloadProjectButton;
     private Button newProjectButton;
     private Button showGeneratedFilesButton;
-
-    // Framework/Tool ComboBoxes
     private ComboBox<String> webFrameworkCombo;
     private ComboBox<String> apiFrameworkCombo;
     private ComboBox<String> jobFrameworkCombo;
     private ComboBox<String> toolsCombo;
-
-    // Entity components
     private Button addEntityButton;
     private Grid<EntityModel> entityGrid;
-
-    // Repositories and Services
     private final EntityRepository entityRepository;
     private final ProjectRepository projectRepository;
     private final ProjectTypeRepository projectTypeRepository;
     private final FrameworkRepository frameworkRepository;
     private final CodeGeneratorService codeGeneratorService;
+
 
     public MainView(EntityRepository entityRepository, ProjectRepository projectRepository,
                     ProjectTypeRepository projectTypeRepository, FrameworkRepository frameworkRepository,
@@ -69,32 +60,22 @@ public class MainView extends VerticalLayout {
         this.frameworkRepository = frameworkRepository;
         this.codeGeneratorService = codeGeneratorService;
 
-        // Add the new admin menu at the top
         createAdminMenu();
-
         add(new H1("Project Management"));
         setupProjectLayout();
-
         add(new H1("Entities"));
         setupEntityLayout();
-
         refreshProjectSelector();
         updateUIState();
     }
 
-    /**
-     * --- NEW ---
-     * Creates a set of navigation buttons to the admin views.
-     */
     private void createAdminMenu() {
         HorizontalLayout menu = new HorizontalLayout();
         menu.setSpacing(true);
         menu.getStyle().set("padding-bottom", "20px");
-
         Button projectTypesButton = new Button("Manage Project Types", e -> UI.getCurrent().navigate(ProjectTypeAdminView.class));
         Button frameworksButton = new Button("Manage Frameworks", e -> UI.getCurrent().navigate(FrameworkAdminView.class));
         Button templatesButton = new Button("Manage Templates", e -> UI.getCurrent().navigate(TemplateAdminView.class));
-
         menu.add(projectTypesButton, frameworksButton, templatesButton);
         add(menu);
     }
@@ -111,10 +92,12 @@ public class MainView extends VerticalLayout {
 
         newProjectName = new TextField("Project Name");
 
-        // --- MODIFIED: Fetches items from the database ---
+        // MODIFIED: Use ProjectType objects and add the listener
         projectTypeCombo = new ComboBox<>("Project Type");
-        projectTypeCombo.setItems(projectTypeRepository.findAll().stream().map(ProjectType::getName).collect(Collectors.toList()));
+        projectTypeCombo.setItems(projectTypeRepository.findAll());
+        projectTypeCombo.setItemLabelGenerator(ProjectType::getName);
         projectTypeCombo.setPlaceholder("Select project type");
+        projectTypeCombo.addValueChangeListener(e -> updateFrameworkCombosVisibility(e.getValue()));
 
         buildToolSelector = new RadioButtonGroup<>();
         buildToolSelector.setLabel("Build Tool");
@@ -124,38 +107,138 @@ public class MainView extends VerticalLayout {
         javaVersionCombo.setItems("8", "11", "17", "21");
         javaVersionCombo.setPlaceholder("Select version");
 
-        // --- MODIFIED: Fetches all frameworks from the database once ---
-        List<String> allFrameworks = frameworkRepository.findAll().stream().map(Framework::getName).collect(Collectors.toList());
-
-        webFrameworkCombo = new ComboBox<>("Web Framework", allFrameworks);
+        // Framework combos are now created without items initially
+        webFrameworkCombo = new ComboBox<>("Web Framework");
         webFrameworkCombo.setVisible(false);
-
-        apiFrameworkCombo = new ComboBox<>("API Framework", allFrameworks);
+        apiFrameworkCombo = new ComboBox<>("API Framework");
         apiFrameworkCombo.setVisible(false);
-
-        jobFrameworkCombo = new ComboBox<>("Job Framework", allFrameworks);
+        jobFrameworkCombo = new ComboBox<>("Job Framework");
         jobFrameworkCombo.setVisible(false);
-
-        toolsCombo = new ComboBox<>("Tool", allFrameworks);
+        toolsCombo = new ComboBox<>("Tool");
         toolsCombo.setVisible(false);
-
-        projectTypeCombo.addValueChangeListener(e -> updateFrameworkCombosVisibility(e.getValue()));
 
         HorizontalLayout projectDetailsLayout = new HorizontalLayout(newProjectName, projectTypeCombo, buildToolSelector, javaVersionCombo);
         projectDetailsLayout.setAlignItems(Alignment.BASELINE);
-
         HorizontalLayout frameworkLayout = new HorizontalLayout(webFrameworkCombo, apiFrameworkCombo, jobFrameworkCombo, toolsCombo);
         frameworkLayout.setAlignItems(Alignment.BASELINE);
-
         saveProjectButton = new Button("Save Project", e -> saveOrUpdateProject());
         downloadProjectButton = new Button("Download Project", e -> downloadProject());
         showGeneratedFilesButton = new Button("Show Generated Files", e -> showGeneratedFilesInNewTab());
         newProjectButton = new Button("New Project", e -> projectSelector.clear());
         HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, showGeneratedFilesButton, newProjectButton);
-
         add(projectSelector, projectDetailsLayout, frameworkLayout, buttonLayout);
     }
 
+    // MODIFIED: Logic to dynamically filter frameworks
+    private void updateFrameworkCombosVisibility(ProjectType projectType) {
+        webFrameworkCombo.setVisible(false);
+        apiFrameworkCombo.setVisible(false);
+        jobFrameworkCombo.setVisible(false);
+        toolsCombo.setVisible(false);
+
+        webFrameworkCombo.clear();
+        apiFrameworkCombo.clear();
+        jobFrameworkCombo.clear();
+        toolsCombo.clear();
+
+        if (projectType == null) {
+            return;
+        }
+
+        List<String> associatedFrameworks = projectType.getFrameworks().stream()
+                .map(Framework::getName)
+                .collect(Collectors.toList());
+
+        switch (projectType.getName()) {
+            case "Web":
+                webFrameworkCombo.setItems(associatedFrameworks);
+                webFrameworkCombo.setVisible(true);
+                break;
+            case "API":
+                apiFrameworkCombo.setItems(associatedFrameworks);
+                apiFrameworkCombo.setVisible(true);
+                break;
+            case "Job":
+                jobFrameworkCombo.setItems(associatedFrameworks);
+                jobFrameworkCombo.setVisible(true);
+                break;
+            case "Tools":
+                toolsCombo.setItems(associatedFrameworks);
+                toolsCombo.setVisible(true);
+                break;
+        }
+    }
+
+    // MODIFIED: Logic to handle setting the ProjectType object
+    private void handleProjectSelection(Project project) {
+        if (project != null) {
+            newProjectName.setValue(project.getName());
+            buildToolSelector.setValue(project.getBuildTool());
+            javaVersionCombo.setValue(project.getJavaVersion());
+
+            projectTypeRepository.findByName(project.getProjectType()).ifPresent(pt -> {
+                projectTypeCombo.setValue(pt); // This will trigger the listener
+                String framework = project.getFramework();
+                if (framework != null) {
+                    switch (pt.getName()) {
+                        case "Web":   webFrameworkCombo.setValue(framework); break;
+                        case "API":   apiFrameworkCombo.setValue(framework); break;
+                        case "Job":   jobFrameworkCombo.setValue(framework); break;
+                        case "Tools": toolsCombo.setValue(framework); break;
+                    }
+                }
+            });
+        } else {
+            newProjectName.clear();
+            projectTypeCombo.clear();
+            buildToolSelector.clear();
+            javaVersionCombo.clear();
+        }
+    }
+
+    // MODIFIED: Logic to get the project type name from the object
+    private void saveOrUpdateProject() {
+        String projectName = newProjectName.getValue();
+        ProjectType selectedType = projectTypeCombo.getValue();
+        String buildTool = buildToolSelector.getValue();
+        String javaVersion = javaVersionCombo.getValue();
+
+        if (projectName == null || projectName.trim().isEmpty() || selectedType == null || buildTool == null || javaVersion == null) {
+            Notification.show("Please provide a project name, type, build tool, and Java version.");
+            return;
+        }
+
+        String framework = null;
+        if (webFrameworkCombo.isVisible()) framework = webFrameworkCombo.getValue();
+        else if (apiFrameworkCombo.isVisible()) framework = apiFrameworkCombo.getValue();
+        else if (jobFrameworkCombo.isVisible()) framework = jobFrameworkCombo.getValue();
+        else if (toolsCombo.isVisible()) framework = toolsCombo.getValue();
+
+        if (framework == null) {
+            Notification.show("Please select a framework/tool for the project type '" + selectedType.getName() + "'.");
+            return;
+        }
+
+        Project selectedProject = projectSelector.getValue();
+        Project projectToSave = (selectedProject != null) ? selectedProject : new Project();
+
+        projectToSave.setName(projectName.trim());
+        projectToSave.setProjectType(selectedType.getName()); // Get name from object
+        projectToSave.setBuildTool(buildTool);
+        projectToSave.setFramework(framework);
+        projectToSave.setJavaVersion(javaVersion);
+
+        try {
+            Project savedProject = projectRepository.save(projectToSave);
+            Notification.show("Project '" + savedProject.getName() + "' saved successfully.");
+            refreshProjectSelector();
+            projectSelector.setValue(savedProject);
+        } catch (Exception e) {
+            Notification.show("Error: Could not save project. A project with this name might already exist.");
+        }
+    }
+
+    // ... The rest of MainView.java remains the same ...
     private void showGeneratedFilesInNewTab() {
         Project selectedProject = projectSelector.getValue();
         if (selectedProject == null) {
@@ -186,89 +269,6 @@ public class MainView extends VerticalLayout {
         }).setHeader("Remove");
 
         add(addEntityButton, entityGrid);
-    }
-
-    private void handleProjectSelection(Project project) {
-        if (project != null) {
-            newProjectName.setValue(project.getName());
-            projectTypeCombo.setValue(project.getProjectType());
-            buildToolSelector.setValue(project.getBuildTool());
-            javaVersionCombo.setValue(project.getJavaVersion());
-
-            String framework = project.getFramework();
-            if (framework != null) {
-                updateFrameworkCombosVisibility(project.getProjectType());
-                switch (project.getProjectType()) {
-                    case "Web":   webFrameworkCombo.setValue(framework); break;
-                    case "API":   apiFrameworkCombo.setValue(framework); break;
-                    case "Job":   jobFrameworkCombo.setValue(framework); break;
-                    case "Tools": toolsCombo.setValue(framework); break;
-                }
-            }
-        } else {
-            newProjectName.clear();
-            projectTypeCombo.clear();
-            buildToolSelector.clear();
-            javaVersionCombo.clear();
-            updateFrameworkCombosVisibility(null);
-        }
-    }
-
-    private void saveOrUpdateProject() {
-        String projectName = newProjectName.getValue();
-        String projectType = projectTypeCombo.getValue();
-        String buildTool = buildToolSelector.getValue();
-        String javaVersion = javaVersionCombo.getValue();
-
-        if (projectName == null || projectName.trim().isEmpty() || projectType == null || buildTool == null || javaVersion == null) {
-            Notification.show("Please provide a project name, type, build tool, and Java version.");
-            return;
-        }
-
-        String framework = null;
-        if (webFrameworkCombo.isVisible()) framework = webFrameworkCombo.getValue();
-        else if (apiFrameworkCombo.isVisible()) framework = apiFrameworkCombo.getValue();
-        else if (jobFrameworkCombo.isVisible()) framework = jobFrameworkCombo.getValue();
-        else if (toolsCombo.isVisible()) framework = toolsCombo.getValue();
-
-        if (framework == null) {
-            Notification.show("Please select a framework/tool for the project type '" + projectType + "'.");
-            return;
-        }
-
-        Project selectedProject = projectSelector.getValue();
-        Project projectToSave = (selectedProject != null) ? selectedProject : new Project();
-
-        projectToSave.setName(projectName.trim());
-        projectToSave.setProjectType(projectType);
-        projectToSave.setBuildTool(buildTool);
-        projectToSave.setFramework(framework);
-        projectToSave.setJavaVersion(javaVersion);
-
-        try {
-            Project savedProject = projectRepository.save(projectToSave);
-            Notification.show("Project '" + savedProject.getName() + "' saved successfully.");
-            refreshProjectSelector();
-            projectSelector.setValue(savedProject);
-        } catch (Exception e) {
-            Notification.show("Error: Could not save project. A project with this name might already exist.");
-        }
-    }
-
-    private void updateFrameworkCombosVisibility(String projectType) {
-        webFrameworkCombo.setVisible(false);
-        apiFrameworkCombo.setVisible(false);
-        jobFrameworkCombo.setVisible(false);
-        toolsCombo.setVisible(false);
-
-        if (projectType == null) return;
-
-        switch (projectType) {
-            case "Web":   webFrameworkCombo.setVisible(true); break;
-            case "API":   apiFrameworkCombo.setVisible(true); break;
-            case "Job":   jobFrameworkCombo.setVisible(true); break;
-            case "Tools": toolsCombo.setVisible(true); break;
-        }
     }
 
     private void downloadProject() {

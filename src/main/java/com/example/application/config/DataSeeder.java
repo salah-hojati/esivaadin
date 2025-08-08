@@ -12,6 +12,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional; // 1. Add this import
 import org.springframework.util.FileCopyUtils;
 
 import java.io.InputStreamReader;
@@ -19,6 +20,8 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
@@ -37,64 +40,79 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     @Override
+    @Transactional // 2. Add this annotation
     public void run(String... args) throws Exception {
-        // Seed project-level templates
-        seedTemplate("Maven", "*", "*", "pom", "pom.xml", "classpath:templates/generator/pom.xml.ftl");
-        seedTemplate("Gradle", "*", "*", "build-gradle", "build.gradle", "classpath:templates/generator/build.gradle.ftl");
-
-        // Seed the entity-level template. This makes EntityClassGenerator obsolete.
-        seedTemplate("*", "*", "*", "entity-class", "src/main/java/com/example/domain/${entity.name}.java", "classpath:templates/generator/entity.java.ftl");
-
-        // Seed the new lookup tables
         seedProjectTypes();
         seedFrameworks();
+        seedRelationships(); // This will now run inside a transaction
+
+        seedTemplate("Maven", "*", "*", "pom", "pom.xml", "classpath:templates/generator/pom.xml.ftl");
+        seedTemplate("Gradle", "*", "*", "build-gradle", "build.gradle", "classpath:templates/generator/build.gradle.ftl");
+        seedTemplate("*", "*", "*", "entity-class", "src/main/java/com/example/domain/${entity.name}.java", "classpath:templates/generator/entity.java.ftl");
     }
 
     private void seedProjectTypes() {
-        List.of("Web", "API", "Job", "Tools").forEach(name -> {
-            if (projectTypeRepository.findByName(name).isEmpty()) {
+        if (projectTypeRepository.count() == 0) {
+            List.of("Web", "API", "Job", "Tools").forEach(name -> {
                 ProjectType pt = new ProjectType();
                 pt.setName(name);
                 projectTypeRepository.save(pt);
-                logger.info("Seeded ProjectType: {}", name); // Add logging
-            }
-        });
-        logger.info("All ProjectTypes seeded.");
+            });
+            logger.info("Seeded initial ProjectTypes.");
+        }
     }
 
     private void seedFrameworks() {
-        List.of("Vaadin", "Spring Rest", "Spring MVC", "JSF", "React", "Spring Batch", "JAX-RS", "PrimeFaces", "Struts").forEach(name -> {
-            if (frameworkRepository.findByName(name).isEmpty()) {
-                Framework f = new Framework();
-                f.setName(name);
-                frameworkRepository.save(f);
-                logger.info("Seeded Framework: {}", name); // Add logging
-            }
+        // This condition correctly ensures this code only runs ONCE on a fresh database.
+        if (frameworkRepository.count() == 0) {
+
+            // We can directly iterate over our default list of names.
+            // This is the sole purpose of the seeder: to provide initial data.
+            List.of("Vaadin", "Spring Rest", "Spring MVC", "JSF", "React", "Spring Batch", "JAX-RS", "PrimeFaces", "Struts")
+                    .forEach(name -> {
+                        Framework f = new Framework();
+                        f.setName(name);
+                        frameworkRepository.save(f);
+                    });
+
+            logger.info("Seeded initial Frameworks.");
+        }
+    }
+
+    private void seedRelationships() {
+        Optional<ProjectType> webOpt = projectTypeRepository.findByName("Web");
+        if (webOpt.isPresent() && webOpt.get().getFrameworks().isEmpty()) {
+            logger.info("Seeding ProjectType-Framework relationships...");
+            associate("Web", List.of("Vaadin", "Spring MVC", "JSF", "React", "PrimeFaces", "Struts"));
+            associate("API", List.of("Spring Rest", "JAX-RS"));
+            associate("Job", List.of("Spring Batch"));
+            logger.info("Relationships seeded.");
+        }
+    }
+
+    private void associate(String projectTypeName, List<String> frameworkNames) {
+        projectTypeRepository.findByName(projectTypeName).ifPresent(projectType -> {
+            frameworkNames.forEach(frameworkName ->
+                    frameworkRepository.findByName(frameworkName).ifPresent(projectType::addFramework)
+            );
+            projectTypeRepository.save(projectType);
         });
-        logger.info("All Frameworks seeded.");
     }
 
     private void seedTemplate(String buildTool, String projectType, String framework, String templateName, String path, String resourcePath) {
-        Optional<Template> existingTemplate = templateRepository.findFirstByBuildToolAndProjectTypeAndFrameworkAndTemplateName(
-                buildTool, projectType, framework, templateName
-        );
-
-        if (existingTemplate.isEmpty()) {
+        if (templateRepository.findFirstByBuildToolAndProjectTypeAndFrameworkAndTemplateName(buildTool, projectType, framework, templateName).isEmpty()) {
             try {
                 Resource resource = resourceLoader.getResource(resourcePath);
                 Reader reader = new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8);
                 String content = FileCopyUtils.copyToString(reader);
-
                 Template newTemplate = new Template();
                 newTemplate.setBuildTool(buildTool);
                 newTemplate.setProjectType(projectType);
                 newTemplate.setFramework(framework);
                 newTemplate.setTemplateName(templateName);
-                newTemplate.setPath(path); // Set the new path
+                newTemplate.setPath(path);
                 newTemplate.setContent(content);
-
                 templateRepository.save(newTemplate);
-                logger.info("Seeded Template: {}", templateName);
             } catch (Exception e) {
                 logger.error("Failed to seed template from {}", resourcePath, e);
             }

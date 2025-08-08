@@ -2,6 +2,8 @@ package com.example.application.entity;
 
 import jakarta.persistence.*;
 import jakarta.persistence.Entity;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 public class ProjectType {
@@ -12,7 +14,18 @@ public class ProjectType {
     @Column(unique = true, nullable = false)
     private String name;
 
-    //<editor-fold desc="Getters and Setters">
+    // --- MODIFIED: Removed cascade options ---
+    // We are only managing the relationship to existing Frameworks,
+    // not creating new ones from this entity.
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "project_type_frameworks",
+            joinColumns = @JoinColumn(name = "project_type_id"),
+            inverseJoinColumns = @JoinColumn(name = "framework_id")
+    )
+    private Set<Framework> frameworks = new HashSet<>();
+
+    //<editor-fold desc="Getters, Setters, and Helper methods">
     public Long getId() {
         return id;
     }
@@ -27,6 +40,24 @@ public class ProjectType {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public Set<Framework> getFrameworks() {
+        return frameworks;
+    }
+
+    public void setFrameworks(Set<Framework> frameworks) {
+        this.frameworks = frameworks;
+    }
+
+    public void addFramework(Framework framework) {
+        this.frameworks.add(framework);
+        framework.getProjectTypes().add(this);
+    }
+
+    public void removeFramework(Framework framework) {
+        this.frameworks.remove(framework);
+        framework.getProjectTypes().remove(this);
     }
     //</editor-fold>
 }

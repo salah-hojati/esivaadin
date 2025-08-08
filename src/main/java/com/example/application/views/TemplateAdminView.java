@@ -24,6 +24,7 @@ import com.vaadin.flow.data.binder.ValidationException;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -92,38 +93,44 @@ public class TemplateAdminView extends VerticalLayout {
 
         // Form fields
         ComboBox<String> buildTool = new ComboBox<>("Build Tool");
-        buildTool.setItems("Maven", "Gradle");
+        buildTool.setItems("Maven", "Gradle", "*");
+        buildTool.setAllowCustomValue(true);
 
-        // --- MODIFIED: Replaced TextField with ComboBox ---
         ComboBox<String> projectType = new ComboBox<>("Project Type");
-        List<String> projectTypeNames = projectTypeRepository.findAll().stream().map(ProjectType::getName).collect(Collectors.toList());
+        // Use new ArrayList to make the list mutable for custom values
+        List<String> projectTypeNames = new ArrayList<>(projectTypeRepository.findAll().stream().map(ProjectType::getName).collect(Collectors.toList()));
+        projectTypeNames.add("*");
         projectType.setItems(projectTypeNames);
         projectType.setPlaceholder("Select or type a value (e.g., *)");
         projectType.setAllowCustomValue(true);
         projectType.addCustomValueSetListener(e -> {
             String customValue = e.getDetail();
-            projectTypeNames.add(customValue);
-            projectType.setItems(projectTypeNames);
+            if (!projectTypeNames.contains(customValue)) {
+                projectTypeNames.add(customValue);
+                projectType.setItems(projectTypeNames);
+            }
             projectType.setValue(customValue);
         });
 
-        // --- MODIFIED: Replaced TextField with ComboBox ---
         ComboBox<String> framework = new ComboBox<>("Framework");
-        List<String> frameworkNames = frameworkRepository.findAll().stream().map(Framework::getName).collect(Collectors.toList());
+        // Use new ArrayList to make the list mutable for custom values
+        List<String> frameworkNames = new ArrayList<>(frameworkRepository.findAll().stream().map(Framework::getName).collect(Collectors.toList()));
+        frameworkNames.add("*");
         framework.setItems(frameworkNames);
         framework.setPlaceholder("Select or type a value (e.g., *)");
         framework.setAllowCustomValue(true);
         framework.addCustomValueSetListener(e -> {
             String customValue = e.getDetail();
-            frameworkNames.add(customValue);
-            framework.setItems(frameworkNames);
+            if (!frameworkNames.contains(customValue)) {
+                frameworkNames.add(customValue);
+                framework.setItems(frameworkNames);
+            }
             framework.setValue(customValue);
         });
 
         TextField templateName = new TextField("Template Name");
-        templateName.setPlaceholder("e.g., pom.xml, build.gradle");
+        templateName.setPlaceholder("e.g., pom, entity-class");
 
-        // NEW: Field for the path
         TextField path = new TextField("Path");
         path.setPlaceholder("e.g., pom.xml or src/main/java/com/example/domain/${entity.name}.java");
         path.setWidthFull();
@@ -131,8 +138,8 @@ public class TemplateAdminView extends VerticalLayout {
         TextArea content = new TextArea("Template Content");
         content.setSizeFull();
 
-        // Layout for the form
-        VerticalLayout formLayout = new VerticalLayout(buildTool, projectType, framework, templateName, content);
+        // --- MODIFIED: Added the 'path' field to the layout ---
+        VerticalLayout formLayout = new VerticalLayout(buildTool, projectType, framework, templateName, path, content);
         formLayout.setSizeFull();
         formLayout.setFlexGrow(1, content); // Make the text area expand
 
@@ -141,7 +148,7 @@ public class TemplateAdminView extends VerticalLayout {
         binder.forField(projectType).asRequired("Project type is required").bind(Template::getProjectType, Template::setProjectType);
         binder.forField(framework).asRequired("Framework is required").bind(Template::getFramework, Template::setFramework);
         binder.forField(templateName).asRequired("Template name is required").bind(Template::getTemplateName, Template::setTemplateName);
-        binder.forField(path).asRequired("Path is required").bind(Template::getPath, Template::setPath); // Bind the new path field
+        binder.forField(path).asRequired("Path is required").bind(Template::getPath, Template::setPath);
         binder.forField(content).asRequired("Content cannot be empty").bind(Template::getContent, Template::setContent);
 
         // Populate form if editing
@@ -149,14 +156,24 @@ public class TemplateAdminView extends VerticalLayout {
 
         // Buttons
         Button saveButton = new Button("Save", e -> {
-            try {
-                binder.writeBean(template);
-                templateRepository.save(template);
-                Notification.show("Template saved successfully.", 3000, Notification.Position.BOTTOM_START);
-                refreshGrid();
-                dialog.close();
-            } catch (ValidationException ex) {
-                Notification.show("Please correct the errors before saving.");
+            // First, explicitly run validation. This will update the UI to show any errors.
+            if (binder.validate().isOk()) {
+                // If validation passes, it's safe to write the bean and save.
+                try {
+                    binder.writeBean(template);
+                    templateRepository.save(template);
+                    Notification.show("Template saved successfully.", 3000, Notification.Position.BOTTOM_START);
+                    refreshGrid();
+                    dialog.close();
+                } catch (ValidationException ex) {
+                    // This catch is now a safeguard for any unexpected validation issues.
+                    // It shouldn't be reached if binder.validate() is working correctly.
+                    Notification.show("An unexpected validation error occurred. Please check the form.");
+                    ex.printStackTrace();
+                }
+            } else {
+                // If validation fails, notify the user. The invalid fields will already be highlighted.
+                Notification.show("Please correct the highlighted errors before saving.");
             }
         });
         saveButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);

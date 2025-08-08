@@ -1,8 +1,11 @@
 package com.example.application.views;
 
+import com.example.application.entity.Framework;
 import com.example.application.entity.ProjectType;
+import com.example.application.repository.FrameworkRepository;
 import com.example.application.repository.ProjectTypeRepository;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.combobox.MultiSelectComboBox;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -10,69 +13,61 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.binder.Binder;
 import com.vaadin.flow.router.Route;
-import jakarta.annotation.security.PermitAll;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Route("admin/project-types")
-@PermitAll
 public class ProjectTypeAdminView extends VerticalLayout {
 
     private final ProjectTypeRepository projectTypeRepository;
-    private final Grid<ProjectType> grid = new Grid<>(ProjectType.class);
+    private final FrameworkRepository frameworkRepository;
+    private final Grid<ProjectType> grid = new Grid<>(ProjectType.class, false);
     private final Binder<ProjectType> binder = new Binder<>(ProjectType.class);
 
-    public ProjectTypeAdminView(ProjectTypeRepository projectTypeRepository) {
+    public ProjectTypeAdminView(ProjectTypeRepository projectTypeRepository, FrameworkRepository frameworkRepository) {
         this.projectTypeRepository = projectTypeRepository;
+        this.frameworkRepository = frameworkRepository;
 
-        // UI components
-        Button addButton = new Button("Add Project Type");
-        addButton.addClickListener(e -> openAddDialog());
-
-        grid.setColumns("name"); // Display the 'name' property
-        grid.addComponentColumn(item -> {
-            Button editButton = new Button("Edit");
-            editButton.addClickListener(e -> openEditDialog(item));
-            return editButton;
-        });
-        grid.addComponentColumn(item -> {
-            Button deleteButton = new Button("Delete");
-            deleteButton.addClickListener(e -> deleteItem(item));
-            return deleteButton;
-        });
+        Button addButton = new Button("Add Project Type", e -> openDialog(new ProjectType()));
+        configureGrid();
 
         add(addButton, grid);
         setSizeFull();
-        grid.setSizeFull();
-        setPadding(true);
-
         refreshGrid();
+    }
+
+    private void configureGrid() {
+        grid.setSizeFull();
+        grid.addColumn(ProjectType::getName).setHeader("Name").setSortable(true);
+        grid.addColumn(projectType -> projectType.getFrameworks().stream()
+                        .map(Framework::getName)
+                        .collect(Collectors.joining(", ")))
+                .setHeader("Associated Frameworks");
+
+        grid.addComponentColumn(item -> {
+            Button editButton = new Button("Edit", e -> openDialog(item));
+            return editButton;
+        });
+        grid.addComponentColumn(item -> {
+            Button deleteButton = new Button("Delete", e -> deleteItem(item));
+            deleteButton.getStyle().set("color", "var(--lumo-error-text-color)");
+            return deleteButton;
+        });
     }
 
     private void refreshGrid() {
         grid.setItems(projectTypeRepository.findAll());
     }
 
-    private void openAddDialog() {
+    private void openDialog(ProjectType projectType) {
         Dialog dialog = new Dialog();
-        dialog.setHeaderTitle("Add New Project Type");
+        dialog.setHeaderTitle(projectType.getId() == null ? "Add New Project Type" : "Edit Project Type");
 
-        ProjectType projectType = new ProjectType();
         binder.setBean(projectType);
 
         VerticalLayout formLayout = createFormLayout(dialog);
         dialog.add(formLayout);
-
-        dialog.open();
-    }
-
-    private void openEditDialog(ProjectType item) {
-        Dialog dialog = new Dialog();
-        dialog.setHeaderTitle("Edit Project Type");
-
-        binder.setBean(item);
-
-        VerticalLayout formLayout = createFormLayout(dialog);
-        dialog.add(formLayout);
-
         dialog.open();
     }
 
@@ -82,16 +77,19 @@ public class ProjectTypeAdminView extends VerticalLayout {
                 .asRequired("Name is required")
                 .bind(ProjectType::getName, ProjectType::setName);
 
-        Button saveButton = new Button("Save");
-        saveButton.addClickListener(e -> saveItem(dialog));
+        MultiSelectComboBox<Framework> frameworkSelect = new MultiSelectComboBox<>("Associated Frameworks");
+        List<Framework> allFrameworks = frameworkRepository.findAll();
+        frameworkSelect.setItems(allFrameworks);
+        frameworkSelect.setItemLabelGenerator(Framework::getName);
 
-        Button cancelButton = new Button("Cancel");
-        cancelButton.addClickListener(e -> dialog.close());
+        binder.forField(frameworkSelect)
+                .bind(ProjectType::getFrameworks, ProjectType::setFrameworks);
+
+        Button saveButton = new Button("Save", e -> saveItem(dialog));
+        Button cancelButton = new Button("Cancel", e -> dialog.close());
 
         HorizontalLayout buttonLayout = new HorizontalLayout(saveButton, cancelButton);
-        VerticalLayout formLayout = new VerticalLayout(nameField, buttonLayout);
-        formLayout.setPadding(true);
-        return formLayout;
+        return new VerticalLayout(nameField, frameworkSelect, buttonLayout);
     }
 
     private void saveItem(Dialog dialog) {
