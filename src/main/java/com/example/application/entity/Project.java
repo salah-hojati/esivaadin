@@ -14,9 +14,10 @@ public class Project {
     @Column(unique = true, nullable = false)
     private String name;
 
-    // New fields for project properties
     private String projectType;
     private String buildTool;
+    private String framework;
+    private String javaVersion; // New field for Java version
 
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Entity> entities = new ArrayList<>();
@@ -24,13 +25,14 @@ public class Project {
     public Project() {
     }
 
-    public Project(String name, String projectType, String buildTool) {
+    public Project(String name, String projectType, String buildTool, String framework) {
         this.name = name;
         this.projectType = projectType;
         this.buildTool = buildTool;
+        this.framework = framework;
     }
 
-    // Getters and Setters
+    //<editor-fold desc="Getters and Setters">
     public Long getId() {
         return id;
     }
@@ -59,6 +61,22 @@ public class Project {
         this.buildTool = buildTool;
     }
 
+    public String getFramework() {
+        return framework;
+    }
+
+    public void setFramework(String framework) {
+        this.framework = framework;
+    }
+
+    public String getJavaVersion() {
+        return javaVersion;
+    }
+
+    public void setJavaVersion(String javaVersion) {
+        this.javaVersion = javaVersion;
+    }
+
     public List<Entity> getEntities() {
         return entities;
     }
@@ -66,6 +84,7 @@ public class Project {
     public void setEntities(List<Entity> entities) {
         this.entities = entities;
     }
+    //</editor-fold>
 
     @Override
     public boolean equals(Object o) {

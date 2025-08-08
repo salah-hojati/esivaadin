@@ -6,6 +6,7 @@ import com.example.application.entity.Project;
 import com.example.application.repository.EntityRepository;
 import com.example.application.repository.ProjectRepository;
 import com.example.application.service.CodeGeneratorService;
+import com.vaadin.flow.component.UI; // New import
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.dialog.Dialog;
@@ -20,11 +21,8 @@ import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.server.StreamResource;
 import jakarta.annotation.security.PermitAll;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -39,9 +37,17 @@ public class MainView extends VerticalLayout {
     private TextField newProjectName;
     private ComboBox<String> projectTypeCombo;
     private RadioButtonGroup<String> buildToolSelector;
+    private ComboBox<String> javaVersionCombo;
     private Button saveProjectButton;
     private Button downloadProjectButton;
     private Button newProjectButton;
+    private Button showGeneratedFilesButton;
+
+    // Framework/Tool ComboBoxes
+    private ComboBox<String> webFrameworkCombo;
+    private ComboBox<String> apiFrameworkCombo;
+    private ComboBox<String> jobFrameworkCombo;
+    private ComboBox<String> toolsCombo;
 
     // Entity components
     private Button addEntityButton;
@@ -49,12 +55,12 @@ public class MainView extends VerticalLayout {
 
     private final EntityRepository entityRepository;
     private final ProjectRepository projectRepository;
-    private final CodeGeneratorService codeGeneratorService;
+  //  private final CodeGeneratorService codeGeneratorService;
 
-    public MainView(EntityRepository entityRepository, ProjectRepository projectRepository, CodeGeneratorService codeGeneratorService) {
+    public MainView(EntityRepository entityRepository, ProjectRepository projectRepository) {
         this.entityRepository = entityRepository;
         this.projectRepository = projectRepository;
-        this.codeGeneratorService = codeGeneratorService;
+       // this.codeGeneratorService = codeGeneratorService;
 
         add(new H1("Project Management"));
         setupProjectLayout();
@@ -78,37 +84,84 @@ public class MainView extends VerticalLayout {
 
         newProjectName = new TextField("Project Name");
         projectTypeCombo = new ComboBox<>("Project Type");
-        projectTypeCombo.setItems("Web", "API", "Job","Tools");
+        projectTypeCombo.setItems("Web", "API", "Job", "Tools");
         projectTypeCombo.setPlaceholder("Select project type");
 
         buildToolSelector = new RadioButtonGroup<>();
         buildToolSelector.setLabel("Build Tool");
         buildToolSelector.setItems("Maven", "Gradle");
 
-        HorizontalLayout projectDetailsLayout = new HorizontalLayout(newProjectName, projectTypeCombo, buildToolSelector);
+        javaVersionCombo = new ComboBox<>("Java Version");
+        javaVersionCombo.setItems("8", "11", "17", "21");
+        javaVersionCombo.setPlaceholder("Select version");
+
+        webFrameworkCombo = new ComboBox<>("Web Framework");
+        webFrameworkCombo.setItems("Struts", "JSF", "PrimeFaces", "React", "Vaadin", "Spring MVC");
+        webFrameworkCombo.setVisible(false);
+
+        apiFrameworkCombo = new ComboBox<>("API Framework");
+        apiFrameworkCombo.setItems("JAX-RS", "JAX-WS", "Spring Rest", "Jasper7");
+        apiFrameworkCombo.setVisible(false);
+
+        jobFrameworkCombo = new ComboBox<>("Job Framework");
+        jobFrameworkCombo.setItems("EJB Job", "Spring Batch");
+        jobFrameworkCombo.setVisible(false);
+
+        toolsCombo = new ComboBox<>("Tool");
+        toolsCombo.setItems("Jasper7", "PDF", "Word");
+        toolsCombo.setVisible(false);
+
+        projectTypeCombo.addValueChangeListener(e -> updateFrameworkCombosVisibility(e.getValue()));
+
+        HorizontalLayout projectDetailsLayout = new HorizontalLayout(newProjectName, projectTypeCombo, buildToolSelector, javaVersionCombo);
         projectDetailsLayout.setAlignItems(Alignment.BASELINE);
+
+        HorizontalLayout frameworkLayout = new HorizontalLayout(webFrameworkCombo, apiFrameworkCombo, jobFrameworkCombo, toolsCombo);
+        frameworkLayout.setAlignItems(Alignment.BASELINE);
 
         saveProjectButton = new Button("Save Project", e -> saveOrUpdateProject());
         downloadProjectButton = new Button("Download Project", e -> downloadProject());
+        // --- MODIFIED: The button now calls a new method ---
+        showGeneratedFilesButton = new Button("Show Generated Files", e -> showGeneratedFilesInNewTab());
         newProjectButton = new Button("New Project", e -> projectSelector.clear());
-        HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, newProjectButton);
+        HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, showGeneratedFilesButton, newProjectButton);
 
-        add(projectSelector, projectDetailsLayout, buttonLayout);
+        add(projectSelector, projectDetailsLayout, frameworkLayout, buttonLayout);
     }
+
+    /**
+     * --- NEW ---
+     * Opens the dedicated FileTreeView in a new browser tab.
+     */
+    private void showGeneratedFilesInNewTab() {
+        Project selectedProject = projectSelector.getValue();
+        if (selectedProject == null) {
+            Notification.show("Please select a project to view its files.");
+            return;
+        }
+
+        // Construct the URL for the new view, e.g., "/files/1"
+        String url = "/files/" + selectedProject.getId();
+        // Open the URL in a new browser tab/window
+        UI.getCurrent().getPage().open(url, "_blank");
+    }
+
+    // --- REMOVED ---
+    // The FileNode class, showGeneratedFiles(), and buildFileTree() methods
+    // have been moved to the new FileTreeView class and can be deleted from here.
+
     private void setupEntityLayout() {
-        addEntityButton = new Button("Add Entity", e -> openEntityDialog(null)); // Pass null for new entity
+        addEntityButton = new Button("Add Entity", e -> openEntityDialog(null));
         entityGrid = new Grid<>(EntityModel.class, false);
         entityGrid.addColumn(EntityModel::getName).setHeader("Entity Name").setSortable(true);
         entityGrid.addColumn(entity -> entity.getFields().size()).setHeader("# Fields");
 
-        // Add Edit Button Column
         entityGrid.addComponentColumn(entityModel -> {
             Button editButton = new Button("Edit");
             editButton.addClickListener(e -> openEntityDialog(entityModel));
             return editButton;
         }).setHeader("Edit");
 
-        // Add Remove Button Column
         entityGrid.addComponentColumn(entityModel -> {
             Button removeButton = new Button("Remove");
             removeButton.getStyle().set("color", "var(--lumo-error-text-color)");
@@ -124,10 +177,22 @@ public class MainView extends VerticalLayout {
             newProjectName.setValue(project.getName());
             projectTypeCombo.setValue(project.getProjectType());
             buildToolSelector.setValue(project.getBuildTool());
+            javaVersionCombo.setValue(project.getJavaVersion());
+
+            String framework = project.getFramework();
+            if (framework != null) {
+                switch (project.getProjectType()) {
+                    case "Web":   webFrameworkCombo.setValue(framework); break;
+                    case "API":   apiFrameworkCombo.setValue(framework); break;
+                    case "Job":   jobFrameworkCombo.setValue(framework); break;
+                    case "Tools": toolsCombo.setValue(framework); break;
+                }
+            }
         } else {
             newProjectName.clear();
             projectTypeCombo.clear();
             buildToolSelector.clear();
+            javaVersionCombo.clear();
         }
     }
 
@@ -135,9 +200,26 @@ public class MainView extends VerticalLayout {
         String projectName = newProjectName.getValue();
         String projectType = projectTypeCombo.getValue();
         String buildTool = buildToolSelector.getValue();
+        String javaVersion = javaVersionCombo.getValue();
 
-        if (projectName == null || projectName.trim().isEmpty() || projectType == null || buildTool == null) {
-            Notification.show("Please provide a project name, type, and build tool.");
+        if (projectName == null || projectName.trim().isEmpty() || projectType == null || buildTool == null || javaVersion == null) {
+            Notification.show("Please provide a project name, type, build tool, and Java version.");
+            return;
+        }
+
+        String framework = null;
+        if (webFrameworkCombo.isVisible()) {
+            framework = webFrameworkCombo.getValue();
+        } else if (apiFrameworkCombo.isVisible()) {
+            framework = apiFrameworkCombo.getValue();
+        } else if (jobFrameworkCombo.isVisible()) {
+            framework = jobFrameworkCombo.getValue();
+        } else if (toolsCombo.isVisible()) {
+            framework = toolsCombo.getValue();
+        }
+
+        if (framework == null) {
+            Notification.show("Please select a framework/tool for the project type '" + projectType + "'.");
             return;
         }
 
@@ -147,6 +229,8 @@ public class MainView extends VerticalLayout {
         projectToSave.setName(projectName.trim());
         projectToSave.setProjectType(projectType);
         projectToSave.setBuildTool(buildTool);
+        projectToSave.setFramework(framework);
+        projectToSave.setJavaVersion(javaVersion);
 
         try {
             Project savedProject = projectRepository.save(projectToSave);
@@ -158,8 +242,29 @@ public class MainView extends VerticalLayout {
         }
     }
 
+    private void updateFrameworkCombosVisibility(String projectType) {
+        webFrameworkCombo.setVisible(false);
+        apiFrameworkCombo.setVisible(false);
+        jobFrameworkCombo.setVisible(false);
+        toolsCombo.setVisible(false);
 
-    // Inside your MainView class
+        webFrameworkCombo.clear();
+        apiFrameworkCombo.clear();
+        jobFrameworkCombo.clear();
+        toolsCombo.clear();
+
+        if (projectType == null) {
+            return;
+        }
+
+        switch (projectType) {
+            case "Web":   webFrameworkCombo.setVisible(true); break;
+            case "API":   apiFrameworkCombo.setVisible(true); break;
+            case "Job":   jobFrameworkCombo.setVisible(true); break;
+            case "Tools": toolsCombo.setVisible(true); break;
+        }
+    }
+
     private void downloadProject() {
         Project selectedProject = projectSelector.getValue();
         if (selectedProject == null) {
@@ -167,34 +272,18 @@ public class MainView extends VerticalLayout {
             return;
         }
 
-        List<Entity> entities = entityRepository.findByProjectIdWithFields(selectedProject.getId());
-        if (entities.isEmpty()) {
-            Notification.show("Project has no entities to generate.");
-            return;
-        }
+        String downloadUrl = "/download/project/" + selectedProject.getId();
 
-        try {
-            byte[] zipData = codeGeneratorService.generateAndZipProject(selectedProject, entities);
+        final Anchor anchor = new Anchor(downloadUrl, "Download");
+        anchor.getElement().setAttribute("download", true);
+        anchor.getStyle().set("display", "none");
 
-            StreamResource streamResource = new StreamResource(selectedProject.getName() + ".zip",
-                    () -> new ByteArrayInputStream(zipData));
+        add(anchor);
 
-            // Refined approach for triggering the download
-            Anchor anchor = new Anchor(streamResource, "Download Project");
-            anchor.getElement().setAttribute("download", true);
-            anchor.getElement().getStyle().set("display", "none");
-            add(anchor);
+        anchor.getElement().executeJs("setTimeout(() => { this.click(); this.remove(); }, 0);");
 
-            anchor.getElement().executeJs("setTimeout(() => this.click(), 0);");
-
-            Notification.show("Project download started...");
-
-        } catch (IOException e) {
-            e.printStackTrace();
-            Notification.show("Error generating project zip file.", 3000, Notification.Position.MIDDLE);
-        }
+        Notification.show("Project download started...");
     }
-
 
     private void refreshProjectSelector() {
         List<Project> projects = projectRepository.findAll();
@@ -221,10 +310,6 @@ public class MainView extends VerticalLayout {
         }
     }
 
-    /**
-     * --- MODIFIED ---
-     * Converts a JPA Entity to its UI Model, now including the relationshipType.
-     */
     private EntityModel convertToEntityModel(Entity entity) {
         List<FieldModel> fieldModels = entity.getFields().stream()
                 .map(field -> new FieldModel(field.getId(), field.getName(), field.getType(), field.isRequired(), field.getRelationshipType()))
@@ -238,6 +323,7 @@ public class MainView extends VerticalLayout {
         boolean projectSelected = projectSelector.getValue() != null;
         addEntityButton.setEnabled(projectSelected);
         downloadProjectButton.setEnabled(projectSelected);
+        showGeneratedFilesButton.setEnabled(projectSelected);
         newProjectButton.setEnabled(projectSelected);
         saveProjectButton.setEnabled(true);
     }
@@ -289,10 +375,6 @@ public class MainView extends VerticalLayout {
         dialog.open();
     }
 
-    /**
-     * --- MODIFIED ---
-     * Now displays the relationship type in a read-only field.
-     */
     private void renderFieldRow(FieldModel fieldModel, VerticalLayout layout, List<FieldModel> modelList, EntityModel entityModel) {
         HorizontalLayout fieldRow = new HorizontalLayout();
         fieldRow.setAlignItems(Alignment.BASELINE);
@@ -311,12 +393,11 @@ public class MainView extends VerticalLayout {
         type.setValue(fieldModel.getType());
         type.setReadOnly(true);
 
-        // New field to display the relationship
         TextField relationship = new TextField("Relationship");
         if (fieldModel.getRelationshipType() != null) {
             relationship.setValue(fieldModel.getRelationshipType());
         } else {
-            relationship.setVisible(false); // Hide if it's not a relationship
+            relationship.setVisible(false);
         }
         relationship.setReadOnly(true);
 
@@ -343,10 +424,6 @@ public class MainView extends VerticalLayout {
         layout.add(fieldRow);
     }
 
-    /**
-     * --- MODIFIED ---
-     * This method now contains the logic to show/hide the relationship radio buttons.
-     */
     private Button createAddFieldButton(VerticalLayout fieldsLayout, List<FieldModel> tempFieldModels, EntityModel entityToEdit) {
         return new Button("Add Field", e -> {
             Dialog fieldDialog = new Dialog();
@@ -354,21 +431,17 @@ public class MainView extends VerticalLayout {
             ComboBox<String> fieldType = new ComboBox<>("Type");
             Checkbox required = new Checkbox("Required");
 
-            // 1. Create the relationship selector and hide it by default
             RadioButtonGroup<String> relationshipSelector = new RadioButtonGroup<>("Relationship Type");
             relationshipSelector.setItems("OneToOne", "ManyToOne", "OneToMany");
             relationshipSelector.setVisible(false);
 
-            // 2. Get all possible types (primitives + entities)
             final List<String> standardTypes = List.of("String", "Integer", "Boolean", "Double", "Date");
             final Project currentProject = projectSelector.getValue();
 
-            // This variable is now declared final and assigned only once.
             final List<String> entityTypeNames;
             if (currentProject != null) {
                 entityTypeNames = entityRepository.findByProjectId(currentProject.getId()).stream()
                         .map(Entity::getName)
-                        // Filter out the current entity's name if we are editing to prevent self-reference
                         .filter(name -> entityToEdit == null || !name.equals(entityToEdit.getName()))
                         .collect(Collectors.toList());
             } else {
@@ -379,9 +452,7 @@ public class MainView extends VerticalLayout {
             allPossibleTypes.addAll(entityTypeNames);
             fieldType.setItems(allPossibleTypes);
 
-            // 3. Add a listener to show/hide the relationship selector
             fieldType.addValueChangeListener(event -> {
-                // This now works because entityTypeNames is effectively final
                 if (entityTypeNames.contains(event.getValue())) {
                     relationshipSelector.setVisible(true);
                 } else {
@@ -392,7 +463,6 @@ public class MainView extends VerticalLayout {
 
             Button saveFieldBtn = new Button("Save", ev -> {
                 if (!fieldName.isEmpty() && fieldType.getValue() != null) {
-                    // Get the relationship value, which may be null
                     String relationship = relationshipSelector.getValue();
                     FieldModel newField = new FieldModel(null, fieldName.getValue(), fieldType.getValue(), required.getValue(), relationship);
                     tempFieldModels.add(newField);
@@ -403,16 +473,11 @@ public class MainView extends VerticalLayout {
                 }
             });
 
-            // Add the new radio button group to the dialog
             fieldDialog.add(fieldName, fieldType, relationshipSelector, required, saveFieldBtn);
             fieldDialog.open();
         });
     }
 
-    /**
-     * --- MODIFIED ---
-     * Now saves the relationshipType when creating or updating an entity.
-     */
     private Button createSaveEntityButton(boolean isEditing, EntityModel entityToEdit, Dialog dialog, TextField entityNameField, List<FieldModel> tempFieldModels, Project selectedProject) {
         return new Button(isEditing ? "Update Entity" : "Save Entity", e -> {
             String entityName = entityNameField.getValue();
@@ -425,7 +490,6 @@ public class MainView extends VerticalLayout {
                 entityRepository.findByIdWithFields(entityToEdit.getId()).ifPresent(existingEntity -> {
                     existingEntity.setName(entityName);
 
-                    // Add new fields (removals are handled by the 'X' button)
                     tempFieldModels.stream()
                             .filter(fm -> fm.getId() == null)
                             .forEach(newFieldModel -> {
@@ -437,7 +501,6 @@ public class MainView extends VerticalLayout {
                     Notification.show("Entity '" + entityName + "' updated.");
                 });
             } else {
-                // Create a new entity
                 List<Field> fieldList = tempFieldModels.stream()
                         .map(fm -> new Field(fm.getName(), fm.getType(), fm.isRequired(), fm.getRelationshipType()))
                         .collect(Collectors.toList());
