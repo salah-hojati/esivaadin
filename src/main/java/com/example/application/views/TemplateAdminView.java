@@ -65,7 +65,7 @@ public class TemplateAdminView extends VerticalLayout {
         grid.addColumn(Template::getProjectType).setHeader("Project Type").setSortable(true).setFlexGrow(0);
         grid.addColumn(Template::getFramework).setHeader("Framework").setSortable(true).setFlexGrow(0);
         grid.addColumn(Template::getTemplateName).setHeader("Template Name").setSortable(true).setFlexGrow(1);
-
+        grid.addColumn(Template::getPath).setHeader("Path").setSortable(true).setFlexGrow(1);
         grid.addComponentColumn(template -> {
             Button editButton = new Button("Edit", VaadinIcon.EDIT.create());
             editButton.addClickListener(e -> openTemplateDialog(template));
@@ -123,6 +123,11 @@ public class TemplateAdminView extends VerticalLayout {
         TextField templateName = new TextField("Template Name");
         templateName.setPlaceholder("e.g., pom.xml, build.gradle");
 
+        // NEW: Field for the path
+        TextField path = new TextField("Path");
+        path.setPlaceholder("e.g., pom.xml or src/main/java/com/example/domain/${entity.name}.java");
+        path.setWidthFull();
+
         TextArea content = new TextArea("Template Content");
         content.setSizeFull();
 
@@ -136,6 +141,7 @@ public class TemplateAdminView extends VerticalLayout {
         binder.forField(projectType).asRequired("Project type is required").bind(Template::getProjectType, Template::setProjectType);
         binder.forField(framework).asRequired("Framework is required").bind(Template::getFramework, Template::setFramework);
         binder.forField(templateName).asRequired("Template name is required").bind(Template::getTemplateName, Template::setTemplateName);
+        binder.forField(path).asRequired("Path is required").bind(Template::getPath, Template::setPath); // Bind the new path field
         binder.forField(content).asRequired("Content cannot be empty").bind(Template::getContent, Template::setContent);
 
         // Populate form if editing

@@ -2,35 +2,35 @@ package com.example.application.views;
 
 import com.example.application.entity.Entity;
 import com.example.application.entity.Field;
+import com.example.application.entity.Framework;
 import com.example.application.entity.Project;
+import com.example.application.entity.ProjectType;
 import com.example.application.repository.EntityRepository;
+import com.example.application.repository.FrameworkRepository;
 import com.example.application.repository.ProjectRepository;
+import com.example.application.repository.ProjectTypeRepository;
 import com.example.application.service.CodeGeneratorService;
-import com.vaadin.flow.component.UI; // New import
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.Anchor;
-import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H1;
+import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
-import com.vaadin.flow.component.checkbox.Checkbox;
-import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
-import jakarta.annotation.security.PermitAll;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Route("")
-@PermitAll
 public class MainView extends VerticalLayout {
     // Project components
     private ComboBox<Project> projectSelector;
@@ -53,14 +53,24 @@ public class MainView extends VerticalLayout {
     private Button addEntityButton;
     private Grid<EntityModel> entityGrid;
 
+    // Repositories and Services
     private final EntityRepository entityRepository;
     private final ProjectRepository projectRepository;
-  //  private final CodeGeneratorService codeGeneratorService;
+    private final ProjectTypeRepository projectTypeRepository;
+    private final FrameworkRepository frameworkRepository;
+    private final CodeGeneratorService codeGeneratorService;
 
-    public MainView(EntityRepository entityRepository, ProjectRepository projectRepository) {
+    public MainView(EntityRepository entityRepository, ProjectRepository projectRepository,
+                    ProjectTypeRepository projectTypeRepository, FrameworkRepository frameworkRepository,
+                    CodeGeneratorService codeGeneratorService) {
         this.entityRepository = entityRepository;
         this.projectRepository = projectRepository;
-       // this.codeGeneratorService = codeGeneratorService;
+        this.projectTypeRepository = projectTypeRepository;
+        this.frameworkRepository = frameworkRepository;
+        this.codeGeneratorService = codeGeneratorService;
+
+        // Add the new admin menu at the top
+        createAdminMenu();
 
         add(new H1("Project Management"));
         setupProjectLayout();
@@ -70,6 +80,23 @@ public class MainView extends VerticalLayout {
 
         refreshProjectSelector();
         updateUIState();
+    }
+
+    /**
+     * --- NEW ---
+     * Creates a set of navigation buttons to the admin views.
+     */
+    private void createAdminMenu() {
+        HorizontalLayout menu = new HorizontalLayout();
+        menu.setSpacing(true);
+        menu.getStyle().set("padding-bottom", "20px");
+
+        Button projectTypesButton = new Button("Manage Project Types", e -> UI.getCurrent().navigate(ProjectTypeAdminView.class));
+        Button frameworksButton = new Button("Manage Frameworks", e -> UI.getCurrent().navigate(FrameworkAdminView.class));
+        Button templatesButton = new Button("Manage Templates", e -> UI.getCurrent().navigate(TemplateAdminView.class));
+
+        menu.add(projectTypesButton, frameworksButton, templatesButton);
+        add(menu);
     }
 
     private void setupProjectLayout() {
@@ -83,8 +110,10 @@ public class MainView extends VerticalLayout {
         });
 
         newProjectName = new TextField("Project Name");
+
+        // --- MODIFIED: Fetches items from the database ---
         projectTypeCombo = new ComboBox<>("Project Type");
-        projectTypeCombo.setItems("Web", "API", "Job", "Tools");
+        projectTypeCombo.setItems(projectTypeRepository.findAll().stream().map(ProjectType::getName).collect(Collectors.toList()));
         projectTypeCombo.setPlaceholder("Select project type");
 
         buildToolSelector = new RadioButtonGroup<>();
@@ -95,20 +124,19 @@ public class MainView extends VerticalLayout {
         javaVersionCombo.setItems("8", "11", "17", "21");
         javaVersionCombo.setPlaceholder("Select version");
 
-        webFrameworkCombo = new ComboBox<>("Web Framework");
-        webFrameworkCombo.setItems("Struts", "JSF", "PrimeFaces", "React", "Vaadin", "Spring MVC");
+        // --- MODIFIED: Fetches all frameworks from the database once ---
+        List<String> allFrameworks = frameworkRepository.findAll().stream().map(Framework::getName).collect(Collectors.toList());
+
+        webFrameworkCombo = new ComboBox<>("Web Framework", allFrameworks);
         webFrameworkCombo.setVisible(false);
 
-        apiFrameworkCombo = new ComboBox<>("API Framework");
-        apiFrameworkCombo.setItems("JAX-RS", "JAX-WS", "Spring Rest", "Jasper7");
+        apiFrameworkCombo = new ComboBox<>("API Framework", allFrameworks);
         apiFrameworkCombo.setVisible(false);
 
-        jobFrameworkCombo = new ComboBox<>("Job Framework");
-        jobFrameworkCombo.setItems("EJB Job", "Spring Batch");
+        jobFrameworkCombo = new ComboBox<>("Job Framework", allFrameworks);
         jobFrameworkCombo.setVisible(false);
 
-        toolsCombo = new ComboBox<>("Tool");
-        toolsCombo.setItems("Jasper7", "PDF", "Word");
+        toolsCombo = new ComboBox<>("Tool", allFrameworks);
         toolsCombo.setVisible(false);
 
         projectTypeCombo.addValueChangeListener(e -> updateFrameworkCombosVisibility(e.getValue()));
@@ -121,7 +149,6 @@ public class MainView extends VerticalLayout {
 
         saveProjectButton = new Button("Save Project", e -> saveOrUpdateProject());
         downloadProjectButton = new Button("Download Project", e -> downloadProject());
-        // --- MODIFIED: The button now calls a new method ---
         showGeneratedFilesButton = new Button("Show Generated Files", e -> showGeneratedFilesInNewTab());
         newProjectButton = new Button("New Project", e -> projectSelector.clear());
         HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, showGeneratedFilesButton, newProjectButton);
@@ -129,26 +156,15 @@ public class MainView extends VerticalLayout {
         add(projectSelector, projectDetailsLayout, frameworkLayout, buttonLayout);
     }
 
-    /**
-     * --- NEW ---
-     * Opens the dedicated FileTreeView in a new browser tab.
-     */
     private void showGeneratedFilesInNewTab() {
         Project selectedProject = projectSelector.getValue();
         if (selectedProject == null) {
             Notification.show("Please select a project to view its files.");
             return;
         }
-
-        // Construct the URL for the new view, e.g., "/files/1"
         String url = "/files/" + selectedProject.getId();
-        // Open the URL in a new browser tab/window
         UI.getCurrent().getPage().open(url, "_blank");
     }
-
-    // --- REMOVED ---
-    // The FileNode class, showGeneratedFiles(), and buildFileTree() methods
-    // have been moved to the new FileTreeView class and can be deleted from here.
 
     private void setupEntityLayout() {
         addEntityButton = new Button("Add Entity", e -> openEntityDialog(null));
@@ -181,6 +197,7 @@ public class MainView extends VerticalLayout {
 
             String framework = project.getFramework();
             if (framework != null) {
+                updateFrameworkCombosVisibility(project.getProjectType());
                 switch (project.getProjectType()) {
                     case "Web":   webFrameworkCombo.setValue(framework); break;
                     case "API":   apiFrameworkCombo.setValue(framework); break;
@@ -193,6 +210,7 @@ public class MainView extends VerticalLayout {
             projectTypeCombo.clear();
             buildToolSelector.clear();
             javaVersionCombo.clear();
+            updateFrameworkCombosVisibility(null);
         }
     }
 
@@ -208,15 +226,10 @@ public class MainView extends VerticalLayout {
         }
 
         String framework = null;
-        if (webFrameworkCombo.isVisible()) {
-            framework = webFrameworkCombo.getValue();
-        } else if (apiFrameworkCombo.isVisible()) {
-            framework = apiFrameworkCombo.getValue();
-        } else if (jobFrameworkCombo.isVisible()) {
-            framework = jobFrameworkCombo.getValue();
-        } else if (toolsCombo.isVisible()) {
-            framework = toolsCombo.getValue();
-        }
+        if (webFrameworkCombo.isVisible()) framework = webFrameworkCombo.getValue();
+        else if (apiFrameworkCombo.isVisible()) framework = apiFrameworkCombo.getValue();
+        else if (jobFrameworkCombo.isVisible()) framework = jobFrameworkCombo.getValue();
+        else if (toolsCombo.isVisible()) framework = toolsCombo.getValue();
 
         if (framework == null) {
             Notification.show("Please select a framework/tool for the project type '" + projectType + "'.");
@@ -248,14 +261,7 @@ public class MainView extends VerticalLayout {
         jobFrameworkCombo.setVisible(false);
         toolsCombo.setVisible(false);
 
-        webFrameworkCombo.clear();
-        apiFrameworkCombo.clear();
-        jobFrameworkCombo.clear();
-        toolsCombo.clear();
-
-        if (projectType == null) {
-            return;
-        }
+        if (projectType == null) return;
 
         switch (projectType) {
             case "Web":   webFrameworkCombo.setVisible(true); break;
@@ -271,17 +277,12 @@ public class MainView extends VerticalLayout {
             Notification.show("Please select a project to download.");
             return;
         }
-
         String downloadUrl = "/download/project/" + selectedProject.getId();
-
         final Anchor anchor = new Anchor(downloadUrl, "Download");
         anchor.getElement().setAttribute("download", true);
         anchor.getStyle().set("display", "none");
-
         add(anchor);
-
         anchor.getElement().executeJs("setTimeout(() => { this.click(); this.remove(); }, 0);");
-
         Notification.show("Project download started...");
     }
 

@@ -6,6 +6,8 @@ import com.example.application.entity.Template;
 import com.example.application.repository.FrameworkRepository;
 import com.example.application.repository.ProjectTypeRepository;
 import com.example.application.repository.TemplateRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -21,6 +23,7 @@ import java.util.Optional;
 @Component
 public class DataSeeder implements CommandLineRunner {
 
+    private static final Logger logger = LoggerFactory.getLogger(DataSeeder.class);
     private final TemplateRepository templateRepository;
     private final ResourceLoader resourceLoader;
     private final ProjectTypeRepository projectTypeRepository;
@@ -35,8 +38,12 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        // Seed a default "pom.xml" template for Maven.
-        seedTemplate("Maven", "*", "*", "pom.xml", "classpath:templates/generator/pom.xml.ftl");
+        // Seed project-level templates
+        seedTemplate("Maven", "*", "*", "pom", "pom.xml", "classpath:templates/generator/pom.xml.ftl");
+        seedTemplate("Gradle", "*", "*", "build-gradle", "build.gradle", "classpath:templates/generator/build.gradle.ftl");
+
+        // Seed the entity-level template. This makes EntityClassGenerator obsolete.
+        seedTemplate("*", "*", "*", "entity-class", "src/main/java/com/example/domain/${entity.name}.java", "classpath:templates/generator/entity.java.ftl");
 
         // Seed the new lookup tables
         seedProjectTypes();
@@ -49,8 +56,10 @@ public class DataSeeder implements CommandLineRunner {
                 ProjectType pt = new ProjectType();
                 pt.setName(name);
                 projectTypeRepository.save(pt);
+                logger.info("Seeded ProjectType: {}", name); // Add logging
             }
         });
+        logger.info("All ProjectTypes seeded.");
     }
 
     private void seedFrameworks() {
@@ -59,17 +68,17 @@ public class DataSeeder implements CommandLineRunner {
                 Framework f = new Framework();
                 f.setName(name);
                 frameworkRepository.save(f);
+                logger.info("Seeded Framework: {}", name); // Add logging
             }
         });
+        logger.info("All Frameworks seeded.");
     }
 
-    private void seedTemplate(String buildTool, String projectType, String framework, String templateName, String resourcePath) {
-        // Check if a template with these exact characteristics already exists.
+    private void seedTemplate(String buildTool, String projectType, String framework, String templateName, String path, String resourcePath) {
         Optional<Template> existingTemplate = templateRepository.findFirstByBuildToolAndProjectTypeAndFrameworkAndTemplateName(
-            buildTool, projectType, framework, templateName
+                buildTool, projectType, framework, templateName
         );
 
-        // If it doesn't exist, create it.
         if (existingTemplate.isEmpty()) {
             try {
                 Resource resource = resourceLoader.getResource(resourcePath);
@@ -81,14 +90,13 @@ public class DataSeeder implements CommandLineRunner {
                 newTemplate.setProjectType(projectType);
                 newTemplate.setFramework(framework);
                 newTemplate.setTemplateName(templateName);
+                newTemplate.setPath(path); // Set the new path
                 newTemplate.setContent(content);
 
                 templateRepository.save(newTemplate);
-                System.out.println("Seeded template: " + templateName + " for " + buildTool);
-
+                logger.info("Seeded Template: {}", templateName);
             } catch (Exception e) {
-                System.err.println("Failed to seed template from " + resourcePath);
-                e.printStackTrace();
+                logger.error("Failed to seed template from {}", resourcePath, e);
             }
         }
     }

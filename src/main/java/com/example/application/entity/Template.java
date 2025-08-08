@@ -7,9 +7,8 @@ import jakarta.persistence.Entity;
  * Represents a code generation template stored in the database.
  */
 @Entity
-// Add indexes for faster lookups on the fields we will be querying.
 @Table(name = "project_templates", indexes = {
-    @Index(name = "idx_template_lookup", columnList = "buildTool, projectType, framework, templateName")
+        @Index(name = "idx_template_lookup", columnList = "buildTool, projectType, framework, templateName")
 })
 public class Template {
 
@@ -17,23 +16,23 @@ public class Template {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // e.g., "Maven", "Gradle"
     @Column(nullable = false)
     private String buildTool;
 
-    // e.g., "Web", "API", or "*" for a wildcard/default
     @Column(nullable = false)
     private String projectType;
 
-    // e.g., "Vaadin", "Spring Rest", or "*" for a wildcard/default
     @Column(nullable = false)
     private String framework;
 
-    // The name of the file to be generated, e.g., "pom.xml"
+    // The logical name of the template, e.g., "pom", "entity-class"
     @Column(nullable = false)
     private String templateName;
 
-    // Use @Lob to allow for very large template strings.
+    // NEW: The path where the file will be generated. Can contain FreeMarker expressions.
+    @Column(nullable = false)
+    private String path;
+
     @Lob
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
@@ -77,6 +76,14 @@ public class Template {
 
     public void setTemplateName(String templateName) {
         this.templateName = templateName;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public void setPath(String path) {
+        this.path = path;
     }
 
     public String getContent() {
