@@ -78,7 +78,7 @@ public class MainView extends VerticalLayout {
 
         newProjectName = new TextField("Project Name");
         projectTypeCombo = new ComboBox<>("Project Type");
-        projectTypeCombo.setItems("Web", "API", "Job");
+        projectTypeCombo.setItems("Web", "API", "Job","Tools");
         projectTypeCombo.setPlaceholder("Select project type");
 
         buildToolSelector = new RadioButtonGroup<>();
@@ -95,7 +95,6 @@ public class MainView extends VerticalLayout {
 
         add(projectSelector, projectDetailsLayout, buttonLayout);
     }
-
     private void setupEntityLayout() {
         addEntityButton = new Button("Add Entity", e -> openEntityDialog(null)); // Pass null for new entity
         entityGrid = new Grid<>(EntityModel.class, false);
