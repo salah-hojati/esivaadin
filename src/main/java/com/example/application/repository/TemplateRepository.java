@@ -19,7 +19,7 @@ public interface TemplateRepository extends JpaRepository<Template, Long> {
         String buildTool, String projectType, String framework, String templateName
     );
 
-    @Query("SELECT t FROM Template t WHERE t.buildTool = :buildTool AND " +
+    @Query("SELECT t FROM Template t WHERE t.buildTool IN ( :buildTool , '*') AND " +
             "t.projectType IN (:projectType, '*') AND " +
             "t.framework IN (:framework, '*')")
     List<Template> findApplicableTemplates(@Param("buildTool") String buildTool,
