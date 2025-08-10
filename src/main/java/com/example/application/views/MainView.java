@@ -41,10 +41,10 @@ public class MainView extends VerticalLayout {
     private Button downloadProjectButton;
     private Button newProjectButton;
     private Button showGeneratedFilesButton;
-    private ComboBox<String> webFrameworkCombo;
-    private ComboBox<String> apiFrameworkCombo;
+   // private ComboBox<String> webFrameworkCombo;
+/*    private ComboBox<String> apiFrameworkCombo;
     private ComboBox<String> jobFrameworkCombo;
-    private ComboBox<String> toolsCombo;
+    private ComboBox<String> toolsCombo;*/
     private Button addEntityButton;
     private Grid<EntityModel> entityGrid;
     private final EntityRepository entityRepository;
@@ -110,19 +110,19 @@ public class MainView extends VerticalLayout {
         javaVersionCombo.setItems("8", "11", "17", "21");
         javaVersionCombo.setPlaceholder("Select version");
 
-        webFrameworkCombo = new ComboBox<>("Web Framework");
-        webFrameworkCombo.setVisible(false);
-        apiFrameworkCombo = new ComboBox<>("API Framework");
+     /*   webFrameworkCombo = new ComboBox<>("Web Framework");
+        webFrameworkCombo.setVisible(false);*/
+    /*    apiFrameworkCombo = new ComboBox<>("API Framework");
         apiFrameworkCombo.setVisible(false);
         jobFrameworkCombo = new ComboBox<>("Job Framework");
         jobFrameworkCombo.setVisible(false);
         toolsCombo = new ComboBox<>("Tool");
-        toolsCombo.setVisible(false);
+        toolsCombo.setVisible(false);*/
 
         HorizontalLayout projectDetailsLayout = new HorizontalLayout(newProjectName, projectTypeCombo, buildToolSelector, javaVersionCombo);
         projectDetailsLayout.setAlignItems(Alignment.BASELINE);
-        HorizontalLayout frameworkLayout = new HorizontalLayout(webFrameworkCombo, apiFrameworkCombo, jobFrameworkCombo, toolsCombo);
-        frameworkLayout.setAlignItems(Alignment.BASELINE);
+       // HorizontalLayout frameworkLayout = new HorizontalLayout(webFrameworkCombo/*, apiFrameworkCombo, jobFrameworkCombo, toolsCombo*/);
+        //frameworkLayout.setAlignItems(Alignment.BASELINE);
 
         saveProjectButton = new Button("Save Project", e -> saveOrUpdateProject());
         downloadProjectButton = new Button("Download Project", e -> downloadProject());
@@ -131,7 +131,7 @@ public class MainView extends VerticalLayout {
         newProjectButton = new Button("New Project", e -> projectSelector.clear());
         HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, selectAndGenerateButton, showGeneratedFilesButton, newProjectButton);
 
-        add(projectSelector, projectDetailsLayout, frameworkLayout, buttonLayout);
+        add(projectSelector, projectDetailsLayout, /*frameworkLayout,*/ buttonLayout);
     }
 
     private void openFileSelectionDialog() {
@@ -264,15 +264,15 @@ public class MainView extends VerticalLayout {
     }
 
     private void updateFrameworkCombosVisibility(ProjectType projectType) {
-        webFrameworkCombo.setVisible(false);
-        apiFrameworkCombo.setVisible(false);
+   //     webFrameworkCombo.setVisible(false);
+/*        apiFrameworkCombo.setVisible(false);
         jobFrameworkCombo.setVisible(false);
-        toolsCombo.setVisible(false);
+        toolsCombo.setVisible(false);*/
 
-        webFrameworkCombo.clear();
-        apiFrameworkCombo.clear();
+  //      webFrameworkCombo.clear();
+/*        apiFrameworkCombo.clear();
         jobFrameworkCombo.clear();
-        toolsCombo.clear();
+        toolsCombo.clear();*/
 
         if (projectType == null) {
             return;
@@ -282,7 +282,9 @@ public class MainView extends VerticalLayout {
                 .map(Framework::getName)
                 .collect(Collectors.toList());
 
-        switch (projectType.getName()) {
+     //   webFrameworkCombo.setItems(associatedFrameworks);
+     //   webFrameworkCombo.setVisible(true);
+        /*switch (projectType.getName()) {
             case "Web":
                 webFrameworkCombo.setItems(associatedFrameworks);
                 webFrameworkCombo.setVisible(true);
@@ -299,7 +301,7 @@ public class MainView extends VerticalLayout {
                 toolsCombo.setItems(associatedFrameworks);
                 toolsCombo.setVisible(true);
                 break;
-        }
+        }*/
     }
 
     private void handleProjectSelection(Project project) {
@@ -311,14 +313,15 @@ public class MainView extends VerticalLayout {
             projectTypeRepository.findByName(project.getProjectType()).ifPresent(pt -> {
                 projectTypeCombo.setValue(pt);
                 String framework = project.getFramework();
-                if (framework != null) {
-                    switch (pt.getName()) {
+              ///  if (framework != null) {
+                 //   webFrameworkCombo.setValue(framework);
+                /*    switch (pt.getName()) {
                         case "Web":   webFrameworkCombo.setValue(framework); break;
                         case "API":   apiFrameworkCombo.setValue(framework); break;
                         case "Job":   jobFrameworkCombo.setValue(framework); break;
                         case "Tools": toolsCombo.setValue(framework); break;
-                    }
-                }
+                    }*/
+              //  }
             });
         } else {
             newProjectName.clear();
@@ -340,15 +343,15 @@ public class MainView extends VerticalLayout {
         }
 
         String framework = null;
-        if (webFrameworkCombo.isVisible()) framework = webFrameworkCombo.getValue();
-        else if (apiFrameworkCombo.isVisible()) framework = apiFrameworkCombo.getValue();
+       // if (webFrameworkCombo.isVisible()) framework = webFrameworkCombo.getValue();
+ /*       else if (apiFrameworkCombo.isVisible()) framework = apiFrameworkCombo.getValue();
         else if (jobFrameworkCombo.isVisible()) framework = jobFrameworkCombo.getValue();
-        else if (toolsCombo.isVisible()) framework = toolsCombo.getValue();
+        else if (toolsCombo.isVisible()) framework = toolsCombo.getValue();*/
 
-        if (framework == null) {
+      /*  if (framework == null) {
             Notification.show("Please select a framework/tool for the project type '" + selectedType.getName() + "'.");
             return;
-        }
+        }*/
 
         Project selectedProject = projectSelector.getValue();
         Project projectToSave = (selectedProject != null) ? selectedProject : new Project();

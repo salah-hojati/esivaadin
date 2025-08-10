@@ -1,25 +1,30 @@
 package com.example.application.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.persistence.*;
-import jakarta.persistence.Entity;
-import java.util.HashSet;
+import jakarta.persistence.*; // Make sure you're using the correct import
+import jakarta.persistence.Entity; // Make sure you're using the correct import
 import java.util.Set;
 
 @Entity
 public class Framework {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue
     private Long id;
 
-    @Column(unique = true, nullable = false)
     private String name;
 
-    @ManyToMany(mappedBy = "frameworks")
-    @JsonIgnore // Prevents infinite loops during serialization
-    private Set<ProjectType> projectTypes = new HashSet<>();
+    @ManyToMany
+    @JoinTable( // Example of JoinTable, adjust if needed
+            name = "framework_project_type",
+            joinColumns = @JoinColumn(name = "framework_id"),
+            inverseJoinColumns = @JoinColumn(name = "project_type_id"))
+    private Set<ProjectType> projectTypes;
 
-    //<editor-fold desc="Getters and Setters">
+    // --- Add this field ---
+    private boolean appliesToAll = false;
+
+    // --- Getters and Setters ---
+
     public Long getId() {
         return id;
     }
@@ -43,5 +48,13 @@ public class Framework {
     public void setProjectTypes(Set<ProjectType> projectTypes) {
         this.projectTypes = projectTypes;
     }
-    //</editor-fold>
+
+    // --- And the getter/setter for the new field ---
+    public boolean isAppliesToAll() {
+        return appliesToAll;
+    }
+
+    public void setAppliesToAll(boolean appliesToAll) {
+        this.appliesToAll = appliesToAll;
+    }
 }

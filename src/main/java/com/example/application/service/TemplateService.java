@@ -1,9 +1,9 @@
 package com.example.application.service;
 
-import com.example.application.entity.Entity;
-import com.example.application.entity.Field;
-import com.example.application.entity.Project;
-import com.example.application.entity.Template;
+import com.example.application.entity.*;
+import com.example.application.repository.FrameworkRepository;
+import com.example.application.repository.ProjectRepository;
+import com.example.application.repository.ProjectTypeRepository;
 import com.example.application.repository.TemplateRepository;
 import freemarker.template.Configuration;
 import freemarker.template.TemplateException;
@@ -18,11 +18,21 @@ import java.util.stream.Collectors;
 public class TemplateService {
 
     private final TemplateRepository templateRepository;
+    private final ProjectRepository projectRepository;
+    private final FrameworkRepository frameworkRepository;
+    private final ProjectTypeRepository projectTypeRepository;
     private final Configuration freemarkerConfig;
 
-    public TemplateService(TemplateRepository templateRepository, Configuration freemarkerConfig) {
+    public TemplateService(TemplateRepository templateRepository,
+                           ProjectRepository projectRepository
+            ,FrameworkRepository frameworkRepository,
+                           ProjectTypeRepository projectTypeRepository,
+                           Configuration freemarkerConfig) {
         this.templateRepository = templateRepository;
         this.freemarkerConfig = freemarkerConfig;
+        this.projectRepository = projectRepository;
+        this.frameworkRepository = frameworkRepository;
+        this.projectTypeRepository = projectTypeRepository;
     }
 
     /**
@@ -72,10 +82,16 @@ public class TemplateService {
     }
 
     private List<Template> findApplicableTemplates(Project project) {
+
+
+       // List<Project> projects = projectRepository.findAllByProjectType(project.getProjectType());
+        Optional<ProjectType> proTy = projectTypeRepository.findByName(project.getProjectType());
+        List<Framework> frameworks = frameworkRepository.findByProjectTypeOrAll(proTy.get());
+                //   projectTypeRepository.find
         return templateRepository.findApplicableTemplates(
                 project.getBuildTool(),
                 project.getProjectType(),
-                project.getFramework()
+                frameworks
         );
     }
 

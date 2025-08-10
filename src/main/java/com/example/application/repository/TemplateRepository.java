@@ -1,5 +1,6 @@
 package com.example.application.repository;
 
+import com.example.application.entity.Framework;
 import com.example.application.entity.Template;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -19,10 +20,11 @@ public interface TemplateRepository extends JpaRepository<Template, Long> {
         String buildTool, String projectType, String framework, String templateName
     );
 
-    @Query("SELECT t FROM Template t WHERE t.buildTool IN ( :buildTool , '*') AND " +
-            "t.projectType IN (:projectType, '*') AND " +
-            "t.framework IN (:framework, '*')")
+    @Query("SELECT t FROM Template t WHERE " +
+            "(t.buildTool = :buildTool OR t.buildTool = '*') AND " +
+            "(t.projectType = :projectType OR t.projectType = '*') AND " +
+            "(t.framework IN :frameworks OR t.framework = '*')")
     List<Template> findApplicableTemplates(@Param("buildTool") String buildTool,
                                            @Param("projectType") String projectType,
-                                           @Param("framework") String framework);
+                                           @Param("framework") List<Framework> framework);
 }
