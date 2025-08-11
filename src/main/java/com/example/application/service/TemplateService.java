@@ -9,6 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -61,6 +65,57 @@ public class TemplateService {
             }
         }
         return generatedFiles;
+    }
+    public Path generateAndSaveFilesLocally(Project project, List<Entity> entities) throws IOException {
+        // 1. Find all applicable templates for the project.
+        List<Template> applicableTemplates = findApplicableTemplates(project);
+
+        // 2. Define the base output directory. This will be a new folder with the project's name
+        //    in the current working directory (where the JAR is run from).
+        Path projectRootPath = Paths.get(System.getProperty("user.dir"), project.getName());
+
+        // 3. Process each template and write the file to disk.
+        for (Template template : applicableTemplates) {
+            if (template.getPath().contains("${entity.name}")) {
+                // This template needs to be generated for each entity
+                for (Entity entity : entities) {
+                    processAndWriteSingleFile(projectRootPath, template, project, entities, entity);
+                }
+            } else {
+                // This is a project-level template (like pom.xml)
+                processAndWriteSingleFile(projectRootPath, template, project, entities, null);
+            }
+        }
+
+        // 4. Return the path to the newly created project directory.
+        return projectRootPath;
+    }
+
+    /**
+     * Helper method to process a single template and write it to a file.
+     */
+    private void processAndWriteSingleFile(Path projectRootPath, Template template, Project project, List<Entity> allEntities, Entity currentEntity) throws IOException {
+        try {
+            // Create the data model for FreeMarker
+            Map<String, Object> dataModel = createDataModel(project, allEntities, currentEntity);
+
+            // Process the path and content with the data model
+            String finalPath = processString(template.getPath(), dataModel);
+            String finalContent = processString(template.getContent(), dataModel);
+
+            // Construct the full, absolute path for the new file
+            Path destinationFile = projectRootPath.resolve(finalPath);
+
+            // Ensure the parent directories exist (e.g., src/main/java/com/example)
+            Files.createDirectories(destinationFile.getParent());
+
+            // Write the final content to the file
+            Files.writeString(destinationFile, finalContent, StandardCharsets.UTF_8);
+
+        } catch (TemplateException e) {
+            // Wrap FreeMarker exception in an IOException for simpler error handling
+            throw new IOException("Failed to process template: " + template.getTemplateName(), e);
+        }
     }
 
     /**
@@ -183,5 +238,7 @@ public class TemplateService {
         if (s == null || s.isEmpty()) return s;
         return s.substring(0, 1).toUpperCase() + s.substring(1);
     }
+
+
     //</editor-fold>
 }

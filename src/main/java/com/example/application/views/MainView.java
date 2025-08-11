@@ -26,6 +26,7 @@ import com.vaadin.flow.server.StreamResource;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -48,6 +49,7 @@ public class MainView extends VerticalLayout {
     private final FrameworkRepository frameworkRepository;
     private final CodeGeneratorService codeGeneratorService;
     private Button selectAndGenerateButton;
+    private Button generateLocallyButton;
     //</editor-fold>
 
     public MainView(EntityRepository entityRepository, ProjectRepository projectRepository,
@@ -104,9 +106,9 @@ public class MainView extends VerticalLayout {
         downloadProjectButton = new Button("Download Project", e -> downloadProject());
         selectAndGenerateButton = new Button("Select Files & Generate...", e -> openFileSelectionDialog());
         showGeneratedFilesButton = new Button("Show Generated Files", e -> showGeneratedFilesInNewTab());
+        generateLocallyButton = new Button("Generate Locally", e -> generateFilesLocally()); // NEW
         newProjectButton = new Button("New Project", e -> projectSelector.clear());
-        HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, selectAndGenerateButton, showGeneratedFilesButton, newProjectButton);
-
+        HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, selectAndGenerateButton, showGeneratedFilesButton, generateLocallyButton, newProjectButton);
         add(projectSelector, projectDetailsLayout, buttonLayout);
     }
 
@@ -367,10 +369,29 @@ public class MainView extends VerticalLayout {
         downloadProjectButton.setEnabled(projectSelected);
         selectAndGenerateButton.setEnabled(projectSelected);
         showGeneratedFilesButton.setEnabled(projectSelected);
+        generateLocallyButton.setEnabled(projectSelected);
         newProjectButton.setEnabled(projectSelected);
         saveProjectButton.setEnabled(true);
     }
+    /**
+     * NEW METHOD: Handles the click event for the "Generate Locally" button.
+     */
+    private void generateFilesLocally() {
+        Project selectedProject = projectSelector.getValue();
+        if (selectedProject == null) {
+            Notification.show("Please select a project first.");
+            return;
+        }
+        List<Entity> entities = entityRepository.findByProjectIdWithFields(selectedProject.getId());
 
+        try {
+            Path generatedPath = codeGeneratorService.generateAndSaveFilesLocally(selectedProject, entities);
+            Notification.show("Project files generated at: " + generatedPath.toAbsolutePath(), 5000, Notification.Position.MIDDLE);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Notification.show("Error generating files locally: " + e.getMessage(), 5000, Notification.Position.MIDDLE);
+        }
+    }
     private void confirmRemoveEntity(EntityModel entityToRemove) {
         Dialog confirmDialog = new Dialog();
         confirmDialog.setHeaderTitle("Confirm Removal");

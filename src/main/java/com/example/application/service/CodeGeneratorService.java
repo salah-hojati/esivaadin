@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -54,5 +55,12 @@ public class CodeGeneratorService {
 
     public byte[] generateAndZipProject(Project project, List<Entity> entities) throws IOException {
         return generateAndZipProject(project, entities, null);
+    }
+    /**
+     * NEW METHOD: Delegates to the template service to generate and save files locally.
+     * @return The path to the generated project directory.
+     */
+    public Path generateAndSaveFilesLocally(Project project, List<Entity> entities) throws IOException {
+        return templateService.generateAndSaveFilesLocally(project, entities);
     }
 }

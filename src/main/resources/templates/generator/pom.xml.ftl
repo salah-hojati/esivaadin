@@ -14,8 +14,8 @@
     <name>${project.name}</name>
 
     <properties>
-        <java.version>${project.javaVersion}</java.version>
-        <#if project.framework == "Vaadin">
+        <java.version>${javaVersion}</java.version>
+        <#if frameworks?exists && frameworks?seq_contains("Vaadin")>
             <vaadin.version>${r"${vaadin.version}"}</vaadin.version>
         </#if>
     </properties>
@@ -32,19 +32,19 @@
             <scope>runtime</scope>
         </dependency>
 
-        <#if project.projectType == "Web" || project.projectType == "API" || project.framework == "Spring MVC" || project.framework == "Spring Rest">
+        <#if (project.projectType == "Web" || project.projectType == "API") || (frameworks?exists && (frameworks?seq_contains("Spring MVC") || frameworks?seq_contains("Spring Rest")))>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter-web</artifactId>
             </dependency>
         </#if>
-        <#if project.framework == "Vaadin">
+        <#if frameworks?exists && frameworks?seq_contains("Vaadin")>
             <dependency>
                 <groupId>com.vaadin</groupId>
                 <artifactId>vaadin-spring-boot-starter</artifactId>
             </dependency>
         </#if>
-        <#if project.framework == "Spring Batch">
+        <#if frameworks?exists && frameworks?seq_contains("Spring Batch")>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter-batch</artifactId>
@@ -52,7 +52,7 @@
         </#if>
     </dependencies>
 
-    <#if project.framework == "Vaadin">
+    <#if frameworks?exists && frameworks?seq_contains("Vaadin")>
         <dependencyManagement>
             <dependencies>
                 <dependency>
@@ -75,7 +75,7 @@
         </plugins>
     </build>
 
-    <#if project.framework == "Vaadin">
+    <#if frameworks?exists && frameworks?seq_contains("Vaadin")>
         <profiles>
             <profile>
                 <id>production</id>
