@@ -1,30 +1,42 @@
 package com.example.application.entity;
 
-import jakarta.persistence.*; // Make sure you're using the correct import
-import jakarta.persistence.Entity; // Make sure you're using the correct import
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
 public class Framework {
-
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(unique = true, nullable = false)
     private String name;
 
-    @ManyToMany
-    @JoinTable( // Example of JoinTable, adjust if needed
-            name = "framework_project_type",
+    @ManyToMany(mappedBy = "frameworks")
+    @JsonIgnore
+    private Set<ProjectType> projectTypes = new HashSet<>();
+
+    // --- NEW: ManyToMany relationship with Template ---
+    @ManyToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE }, fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "framework_template",
             joinColumns = @JoinColumn(name = "framework_id"),
-            inverseJoinColumns = @JoinColumn(name = "project_type_id"))
-    private Set<ProjectType> projectTypes;
+            inverseJoinColumns = @JoinColumn(name = "template_id")
+    )
+    private Set<Template> templates = new HashSet<>();
 
-    // --- Add this field ---
-    private boolean appliesToAll = false;
+    public Framework() {
+    }
 
-    // --- Getters and Setters ---
+    public Framework(String name) {
+        this.name = name;
+    }
 
+    //<editor-fold desc="Getters and Setters">
     public Long getId() {
         return id;
     }
@@ -49,12 +61,25 @@ public class Framework {
         this.projectTypes = projectTypes;
     }
 
-    // --- And the getter/setter for the new field ---
-    public boolean isAppliesToAll() {
-        return appliesToAll;
+    public Set<Template> getTemplates() {
+        return templates;
     }
 
-    public void setAppliesToAll(boolean appliesToAll) {
-        this.appliesToAll = appliesToAll;
+    public void setTemplates(Set<Template> templates) {
+        this.templates = templates;
+    }
+    //</editor-fold>
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Framework framework = (Framework) o;
+        return id != null && id.equals(framework.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return id != null ? Objects.hash(id) : getClass().hashCode();
     }
 }

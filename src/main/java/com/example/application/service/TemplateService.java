@@ -1,13 +1,11 @@
 package com.example.application.service;
 
 import com.example.application.entity.*;
-import com.example.application.repository.FrameworkRepository;
-import com.example.application.repository.ProjectRepository;
 import com.example.application.repository.ProjectTypeRepository;
-import com.example.application.repository.TemplateRepository;
 import freemarker.template.Configuration;
 import freemarker.template.TemplateException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -17,35 +15,21 @@ import java.util.stream.Collectors;
 @Service
 public class TemplateService {
 
-    private final TemplateRepository templateRepository;
-    private final ProjectRepository projectRepository;
-    private final FrameworkRepository frameworkRepository;
     private final ProjectTypeRepository projectTypeRepository;
     private final Configuration freemarkerConfig;
 
-    public TemplateService(TemplateRepository templateRepository,
-                           ProjectRepository projectRepository
-            ,FrameworkRepository frameworkRepository,
-                           ProjectTypeRepository projectTypeRepository,
+    // Constructor simplified: FrameworkRepository is no longer needed here.
+    public TemplateService(ProjectTypeRepository projectTypeRepository,
                            Configuration freemarkerConfig) {
-        this.templateRepository = templateRepository;
-        this.freemarkerConfig = freemarkerConfig;
-        this.projectRepository = projectRepository;
-        this.frameworkRepository = frameworkRepository;
         this.projectTypeRepository = projectTypeRepository;
+        this.freemarkerConfig = freemarkerConfig;
     }
 
-    /**
-     * --- NEW ---
-     * Gets a preview of all file paths that would be generated for a given project.
-     * This is a lightweight operation that does not process template content.
-     */
     public List<String> getApplicableFilePaths(Project project, List<Entity> entities) {
         List<Template> applicableTemplates = findApplicableTemplates(project);
-        Map<String, Template> finalTemplates = resolveOverrides(applicableTemplates);
         List<String> filePaths = new ArrayList<>();
 
-        for (Template template : finalTemplates.values()) {
+        for (Template template : applicableTemplates) {
             try {
                 if (template.getPath().contains("${entity.name}")) {
                     for (Entity entity : entities) {
@@ -63,13 +47,11 @@ public class TemplateService {
         return filePaths;
     }
 
-    // --- MODIFIED: Now accepts an optional set of selected paths to filter generation ---
     public Map<String, String> generateFilesFromDbTemplates(Project project, List<Entity> entities, Set<String> selectedPaths) {
         List<Template> applicableTemplates = findApplicableTemplates(project);
-        Map<String, Template> finalTemplates = resolveOverrides(applicableTemplates);
         Map<String, String> generatedFiles = new HashMap<>();
 
-        for (Template template : finalTemplates.values()) {
+        for (Template template : applicableTemplates) {
             if (template.getPath().contains("${entity.name}")) {
                 for (Entity entity : entities) {
                     processAndAddFile(generatedFiles, template, project, entities, entity, selectedPaths);
@@ -81,27 +63,43 @@ public class TemplateService {
         return generatedFiles;
     }
 
+    /**
+     * --- REWRITTEN: Implements the new logic for finding templates. ---
+     * This method is transactional to ensure lazy-loaded collections can be accessed.
+     */
+    @Transactional(readOnly = true)
     private List<Template> findApplicableTemplates(Project project) {
+        String projectTypeName = project.getProjectType();
+        if (projectTypeName == null || projectTypeName.isBlank()) {
+            return Collections.emptyList();
+        }
 
+        // 1. Find the ProjectType entity from the repository.
+        Optional<ProjectType> projectTypeOpt = projectTypeRepository.findByName(projectTypeName);
 
-       // List<Project> projects = projectRepository.findAllByProjectType(project.getProjectType());
-        Optional<ProjectType> proTy = projectTypeRepository.findByName(project.getProjectType());
-        List<Framework> frameworks = frameworkRepository.findByProjectTypeOrAll(proTy.get());
-                //   projectTypeRepository.find
-        return templateRepository.findApplicableTemplates(
-                project.getBuildTool(),
-                project.getProjectType(),
-                frameworks
-        );
+        if (projectTypeOpt.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 2. Get the set of associated frameworks from the ProjectType.
+        Set<Framework> frameworks = projectTypeOpt.get().getFrameworks();
+
+        // 3. For each framework, get its templates. Collect them into a single Set
+        //    to automatically handle duplicates (in case a template is linked to multiple frameworks).
+        Set<Template> allTemplates = frameworks.stream()
+                .flatMap(framework -> framework.getTemplates().stream())
+                .collect(Collectors.toSet());
+
+        // 4. Return the unique templates as a list.
+        return new ArrayList<>(allTemplates);
     }
 
-    // --- MODIFIED: Added filtering logic based on selectedPaths ---
+    //<editor-fold desc="Unchanged Helper Methods">
     private void processAndAddFile(Map<String, String> generatedFiles, Template template, Project project, List<Entity> allEntities, Entity currentEntity, Set<String> selectedPaths) {
         try {
             Map<String, Object> dataModel = createDataModel(project, allEntities, currentEntity);
             String finalPath = processString(template.getPath(), dataModel);
 
-            // If a selection is provided, only generate files that are in the set.
             if (selectedPaths != null && !selectedPaths.contains(finalPath)) {
                 return; // Skip this file
             }
@@ -114,7 +112,6 @@ public class TemplateService {
         }
     }
 
-    // ... (rest of the class is the same)
     private String processString(String stringToProcess, Map<String, Object> dataModel) throws IOException, TemplateException {
         freemarker.template.Template fmTemplate = new freemarker.template.Template("string", stringToProcess, freemarkerConfig);
         StringWriter writer = new StringWriter();
@@ -139,21 +136,6 @@ public class TemplateService {
             dataModel.put("fields", fieldModels);
         }
         return dataModel;
-    }
-
-    private Map<String, Template> resolveOverrides(List<Template> templates) {
-        return templates.stream()
-                .collect(Collectors.toMap(
-                        Template::getTemplateName,
-                        t -> t,
-                        (t1, t2) -> getMoreSpecific(t1, t2)
-                ));
-    }
-
-    private Template getMoreSpecific(Template t1, Template t2) {
-        int score1 = (!"*".equals(t1.getProjectType()) ? 2 : 0) + (!"*".equals(t1.getFramework()) ? 1 : 0);
-        int score2 = (!"*".equals(t2.getProjectType()) ? 2 : 0) + (!"*".equals(t2.getFramework()) ? 1 : 0);
-        return score1 >= score2 ? t1 : t2;
     }
 
     public static class FieldTemplateModel {
@@ -201,4 +183,5 @@ public class TemplateService {
         if (s == null || s.isEmpty()) return s;
         return s.substring(0, 1).toUpperCase() + s.substring(1);
     }
+    //</editor-fold>
 }

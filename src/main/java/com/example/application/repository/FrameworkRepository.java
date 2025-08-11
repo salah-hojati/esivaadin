@@ -15,8 +15,8 @@ public interface FrameworkRepository extends JpaRepository<Framework, Long> {
     Optional<Framework> findByName(String name);
 
 
-    @Query("SELECT f FROM Framework f WHERE :projectType MEMBER OF f.projectTypes OR f.appliesToAll = true")
-    List<Framework> findByProjectTypeOrAll(@Param("projectType") ProjectType projectType);
+  /*  @Query("SELECT f FROM Framework f WHERE :projectType MEMBER OF f.projectTypes OR f.appliesToAll = true")
+    List<Framework> findByProjectTypeOrAll(@Param("projectType") ProjectType projectType);*/
 }
 
 

@@ -8,10 +8,12 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.binder.Binder;
+import com.vaadin.flow.data.binder.ValidationException;
 import com.vaadin.flow.router.Route;
 
 import java.util.List;
@@ -45,10 +47,7 @@ public class ProjectTypeAdminView extends VerticalLayout {
                         .collect(Collectors.joining(", ")))
                 .setHeader("Associated Frameworks");
 
-        grid.addComponentColumn(item -> {
-            Button editButton = new Button("Edit", e -> openDialog(item));
-            return editButton;
-        });
+        grid.addComponentColumn(item -> new Button("Edit", e -> openDialog(item)));
         grid.addComponentColumn(item -> {
             Button deleteButton = new Button("Delete", e -> deleteItem(item));
             deleteButton.getStyle().set("color", "var(--lumo-error-text-color)");
@@ -94,11 +93,17 @@ public class ProjectTypeAdminView extends VerticalLayout {
 
     private void saveItem(Dialog dialog) {
         try {
-            binder.writeBean(binder.getBean());
-            projectTypeRepository.save(binder.getBean());
+            ProjectType projectTypeToSave = binder.getBean();
+            binder.writeBean(projectTypeToSave);
+            projectTypeRepository.save(projectTypeToSave);
+
+            Notification.show("Project Type saved successfully.");
             refreshGrid();
             dialog.close();
+        } catch (ValidationException e) {
+            Notification.show("Please fill in all required fields.");
         } catch (Exception e) {
+            Notification.show("Error: Could not save Project Type. A type with this name may already exist.");
             e.printStackTrace();
         }
     }

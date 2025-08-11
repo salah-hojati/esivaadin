@@ -15,9 +15,8 @@ public class Project {
     private String name;
 
     private String projectType;
-    private String buildTool;
-    private String framework;
-    private String javaVersion; // New field for Java version
+
+    // The 'framework' field is no longer needed and has been removed.
 
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Entity> entities = new ArrayList<>();
@@ -25,11 +24,10 @@ public class Project {
     public Project() {
     }
 
-    public Project(String name, String projectType, String buildTool, String framework) {
+    // Constructor updated to remove the framework parameter.
+    public Project(String name, String projectType) {
         this.name = name;
         this.projectType = projectType;
-        this.buildTool = buildTool;
-        this.framework = framework;
     }
 
     //<editor-fold desc="Getters and Setters">
@@ -51,30 +49,6 @@ public class Project {
 
     public void setProjectType(String projectType) {
         this.projectType = projectType;
-    }
-
-    public String getBuildTool() {
-        return buildTool;
-    }
-
-    public void setBuildTool(String buildTool) {
-        this.buildTool = buildTool;
-    }
-
-    public String getFramework() {
-        return framework;
-    }
-
-    public void setFramework(String framework) {
-        this.framework = framework;
-    }
-
-    public String getJavaVersion() {
-        return javaVersion;
-    }
-
-    public void setJavaVersion(String javaVersion) {
-        this.javaVersion = javaVersion;
     }
 
     public List<Entity> getEntities() {

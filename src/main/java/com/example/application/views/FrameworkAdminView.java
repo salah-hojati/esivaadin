@@ -1,10 +1,13 @@
 package com.example.application.views;
 
 import com.example.application.entity.Framework;
+import com.example.application.entity.Template;
 import com.example.application.repository.FrameworkRepository;
+import com.example.application.repository.TemplateRepository;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
@@ -12,32 +15,26 @@ import com.vaadin.flow.data.binder.Binder;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Route("admin/frameworks")
 @PermitAll
 public class FrameworkAdminView extends VerticalLayout {
 
     private final FrameworkRepository frameworkRepository;
-    private final Grid<Framework> grid = new Grid<>(Framework.class);
+    private final TemplateRepository templateRepository;
+    private final Grid<Framework> grid = new Grid<>(Framework.class, false);
     private final Binder<Framework> binder = new Binder<>(Framework.class);
 
-    public FrameworkAdminView(FrameworkRepository frameworkRepository) {
+    public FrameworkAdminView(FrameworkRepository frameworkRepository, TemplateRepository templateRepository) {
         this.frameworkRepository = frameworkRepository;
+        this.templateRepository = templateRepository;
 
-        // UI components
         Button addButton = new Button("Add Framework");
         addButton.addClickListener(e -> openAddDialog());
 
-        grid.setColumns("name"); // Display the 'name' property
-        grid.addComponentColumn(item -> {
-            Button editButton = new Button("Edit");
-            editButton.addClickListener(e -> openEditDialog(item));
-            return editButton;
-        });
-        grid.addComponentColumn(item -> {
-            Button deleteButton = new Button("Delete");
-            deleteButton.addClickListener(e -> deleteItem(item));
-            return deleteButton;
-        });
+        configureGrid();
 
         add(addButton, grid);
         setSizeFull();
@@ -47,60 +44,91 @@ public class FrameworkAdminView extends VerticalLayout {
         refreshGrid();
     }
 
+    private void configureGrid() {
+        grid.setColumns("name");
+        grid.addColumn(f -> f.getTemplates().size()).setHeader("# Templates");
+        grid.addComponentColumn(this::createEditButton).setHeader("Edit");
+        grid.addComponentColumn(this::createDeleteButton).setHeader("Delete");
+    }
+
+    private Button createEditButton(Framework item) {
+        return new Button("Edit", e -> openEditDialog(item));
+    }
+
+    private Button createDeleteButton(Framework item) {
+        return new Button("Delete", e -> deleteItem(item));
+    }
+
     private void refreshGrid() {
         grid.setItems(frameworkRepository.findAll());
     }
 
     private void openAddDialog() {
-        Dialog dialog = new Dialog();
-        dialog.setHeaderTitle("Add New Framework");
-
-        Framework framework = new Framework();
-        binder.setBean(framework);
-
-        VerticalLayout formLayout = createFormLayout(dialog);
-        dialog.add(formLayout);
-
-        dialog.open();
+        openEditDialog(new Framework());
     }
 
     private void openEditDialog(Framework item) {
         Dialog dialog = new Dialog();
-        dialog.setHeaderTitle("Edit Framework");
+        dialog.setHeaderTitle(item.getId() == null ? "Add New Framework" : "Edit Framework");
+        dialog.setWidth("600px");
 
         binder.setBean(item);
 
-        VerticalLayout formLayout = createFormLayout(dialog);
+        VerticalLayout formLayout = createFormLayout(dialog, item);
         dialog.add(formLayout);
 
         dialog.open();
     }
 
-    private VerticalLayout createFormLayout(Dialog dialog) {
+    private VerticalLayout createFormLayout(Dialog dialog, Framework framework) {
         TextField nameField = new TextField("Name");
         binder.forField(nameField)
                 .asRequired("Name is required")
                 .bind(Framework::getName, Framework::setName);
 
-        Button saveButton = new Button("Save");
-        saveButton.addClickListener(e -> saveItem(dialog));
+        Grid<Template> templateGrid = new Grid<>(Template.class, false);
+        templateGrid.setSelectionMode(Grid.SelectionMode.MULTI);
+        templateGrid.addColumn(Template::getTemplateName).setHeader("Template Name");
+        templateGrid.addColumn(Template::getPath).setHeader("Path");
+        templateGrid.setItems(templateRepository.findAll());
+        templateGrid.setHeight("300px");
 
-        Button cancelButton = new Button("Cancel");
-        cancelButton.addClickListener(e -> dialog.close());
+        if (framework.getTemplates() != null) {
+            // --- FIX: Use setValue() for multi-select components ---
+            framework.getTemplates().forEach(
+                    template -> {templateGrid.getSelectionModel().select(template);
+                    }
+            );
+           // templateGrid.getSelectionModel().select(framework.getTemplates());
+
+        }
+
+        Button saveButton = new Button("Save", e -> saveItem(dialog, templateGrid.getSelectedItems()));
+        Button cancelButton = new Button("Cancel", e -> dialog.close());
 
         HorizontalLayout buttonLayout = new HorizontalLayout(saveButton, cancelButton);
-        VerticalLayout formLayout = new VerticalLayout(nameField, buttonLayout);
+        VerticalLayout formLayout = new VerticalLayout(nameField, templateGrid, buttonLayout);
         formLayout.setPadding(true);
+        formLayout.setSpacing(true);
         return formLayout;
     }
 
-    private void saveItem(Dialog dialog) {
+    private void saveItem(Dialog dialog, Set<Template> selectedTemplates) {
         try {
-            binder.writeBean(binder.getBean());
-            frameworkRepository.save(binder.getBean());
+            Framework frameworkToSave = binder.getBean();
+            binder.writeBean(frameworkToSave);
+
+            frameworkToSave.setTemplates(new HashSet<>(selectedTemplates));
+
+            frameworkRepository.save(frameworkToSave);
+
+            Notification.show("Framework saved successfully.");
             refreshGrid();
             dialog.close();
+        } catch (com.vaadin.flow.data.binder.ValidationException e) {
+            Notification.show("Please fill in all required fields.");
         } catch (Exception e) {
+            Notification.show("Error: Could not save framework. A framework with this name may already exist.");
             e.printStackTrace();
         }
     }

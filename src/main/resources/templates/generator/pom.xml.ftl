@@ -16,7 +16,7 @@
     <properties>
         <java.version>${project.javaVersion}</java.version>
         <#if project.framework == "Vaadin">
-            <vaadin.version>${vaadinVersion}</vaadin.version>
+            <vaadin.version>${r"${vaadin.version}"}</vaadin.version>
         </#if>
     </properties>
 

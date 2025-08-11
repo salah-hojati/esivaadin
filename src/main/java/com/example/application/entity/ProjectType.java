@@ -59,5 +59,13 @@ public class ProjectType {
         this.frameworks.remove(framework);
         framework.getProjectTypes().remove(this);
     }
+
+    public ProjectType(String name) {
+        this.name = name;
+    }
+
+    public ProjectType() {
+    }
+
     //</editor-fold>
 }

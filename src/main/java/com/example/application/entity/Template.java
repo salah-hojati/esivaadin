@@ -1,41 +1,30 @@
 package com.example.application.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.persistence.Entity;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 
-/**
- * Represents a code generation template stored in the database.
- */
 @Entity
-@Table(name = "project_templates", indexes = {
-        @Index(name = "idx_template_lookup", columnList = "buildTool, projectType, framework, templateName")
-})
 public class Template {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String buildTool;
-
-    @Column(nullable = false)
-    private String projectType;
-
-    @Column(nullable = false)
-    private String framework;
-
-    // The logical name of the template, e.g., "pom", "entity-class"
-    @Column(nullable = false)
+    @Column(unique = true, nullable = false)
     private String templateName;
 
-    // NEW: The path where the file will be generated. Can contain FreeMarker expressions.
-    @Column(nullable = false)
     private String path;
 
-    @Lob
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(length = 10000)
     private String content;
+
+    // --- NEW: Inverse side of the relationship to Framework ---
+    @ManyToMany(mappedBy = "templates")
+    @JsonIgnore
+    private Set<Framework> frameworks = new HashSet<>();
 
     //<editor-fold desc="Getters and Setters">
     public Long getId() {
@@ -44,30 +33,6 @@ public class Template {
 
     public void setId(Long id) {
         this.id = id;
-    }
-
-    public String getBuildTool() {
-        return buildTool;
-    }
-
-    public void setBuildTool(String buildTool) {
-        this.buildTool = buildTool;
-    }
-
-    public String getProjectType() {
-        return projectType;
-    }
-
-    public void setProjectType(String projectType) {
-        this.projectType = projectType;
-    }
-
-    public String getFramework() {
-        return framework;
-    }
-
-    public void setFramework(String framework) {
-        this.framework = framework;
     }
 
     public String getTemplateName() {
@@ -93,5 +58,26 @@ public class Template {
     public void setContent(String content) {
         this.content = content;
     }
+
+    public Set<Framework> getFrameworks() {
+        return frameworks;
+    }
+
+    public void setFrameworks(Set<Framework> frameworks) {
+        this.frameworks = frameworks;
+    }
     //</editor-fold>
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Template template = (Template) o;
+        return id != null && id.equals(template.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return id != null ? Objects.hash(id) : getClass().hashCode();
+    }
 }

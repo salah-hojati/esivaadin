@@ -11,6 +11,7 @@ import java.util.Optional;
 
 @Repository
 public interface ProjectTypeRepository extends JpaRepository<ProjectType, Long> {
+
     Optional<ProjectType> findByName(String name);
 
 
