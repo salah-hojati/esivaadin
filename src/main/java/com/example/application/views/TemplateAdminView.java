@@ -2,6 +2,7 @@ package com.example.application.views;
 
 import com.example.application.entity.Template;
 import com.example.application.repository.TemplateRepository;
+import com.example.application.utils.ToFtlConverter;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
@@ -96,6 +97,7 @@ public class TemplateAdminView extends VerticalLayout {
         Button saveButton = new Button("Save", e -> {
             if (binder.validate().isOk()) {
                 try {
+                    template.setContent(ToFtlConverter.convertToFtl(template.getContent()));
                     binder.writeBean(template);
                     templateRepository.save(template);
                     Notification.show("Template saved successfully.", 3000, Notification.Position.BOTTOM_START);
