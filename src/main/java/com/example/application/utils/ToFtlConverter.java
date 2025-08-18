@@ -1,53 +1,81 @@
 package com.example.application.utils;
-
 import java.util.regex.*;
 
 public class ToFtlConverter {
 
-
-    public static String convertToFtl(String input, char prefix) {
+    /**
+     * Converts JSF/expression language patterns to FreeMarker-escaped expressions,
+     * preventing double-escaping and supporting multiple prefixes
+     * @param input The text containing expressions to convert
+     * @param prefixes Array of expression prefixes ('#', '$', etc.)
+     * @return The text with expressions properly escaped for FreeMarker
+     */
+    public static String convertToFtl(String input, char[] prefixes) {
         if (input == null) {
             return "";
         }
-        if (prefix != '#' && prefix != '$') {
-            throw new IllegalArgumentException("Prefix must be either '#' or '$'");
+        if (prefixes == null || prefixes.length == 0) {
+            throw new IllegalArgumentException("At least one prefix must be provided");
         }
-        
-        // Regular expression to match #{...} or ${...} patterns
-        String regex = Pattern.quote(String.valueOf(prefix)) + "\\{([^}]*)\\}";
+
+        // First check if the text is already escaped for any prefix
+        for (char prefix : prefixes) {
+            if (input.contains("${r\"" + prefix + "{")) {
+                return input; // Already escaped, return as-is
+            }
+        }
+
+        // Build regex pattern for all prefixes
+        String prefixPattern = buildPrefixPattern(prefixes);
+        String regex = "(?<!\\$\\{r\"[" + prefixPattern + "]\\{)[" + prefixPattern + "]\\{([^}]*)\\}";
+
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(input);
-        
-        // Replace each match with the FreeMarker-escaped version
+
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
-            String jsfExpr = matcher.group(0);  // The full #{...} or ${...} match
-            String innerContent = matcher.group(1);  // The content inside {}
-            
-            // Escape the expression for FreeMarker
-            matcher.appendReplacement(result, Matcher.quoteReplacement(
-                "${r\"" + jsfExpr + "\"}"
-            ));
+            String expr = matcher.group(0);
+            matcher.appendReplacement(result,
+                    Matcher.quoteReplacement("${r\"" + expr + "\"}"));
         }
         matcher.appendTail(result);
-        
+
         return result.toString();
     }
 
-    // Overloaded method with default '#' prefix for backward compatibility
-    public static String convertToFtl(String input) {
-        return convertToFtl(convertToFtl(input, '#'),'$');
+    private static String buildPrefixPattern(char[] prefixes) {
+        StringBuilder sb = new StringBuilder();
+        for (char prefix : prefixes) {
+            if (sb.length() > 0) {
+                sb.append('|');
+            }
+            sb.append(Pattern.quote(String.valueOf(prefix)));
+        }
+        return sb.toString();
     }
+
+    // Overloaded method with default '#' prefix for backward compatibility
+  /*  public static String convertJsfToFtl(String input) {
+        return convertJsfToFtl(input, new char[]{'#'});
+    }*/
 
     // Example usage
     public static void main(String[] args) {
-        String jsfText1 = "<h:outputText value=\"#{msg.hello}\" rendered=\"#{bean.condition}\"/>";
-        String jsfText2 = "<h:outputText value=\"${msg.hello}\" rendered=\"${bean.condition}\"/>";
-        
-        System.out.println(convertToFtl(jsfText1, '#')); // With # prefix
-        // Output: <h:outputText value="${r"#{msg.hello}"}" rendered="${r"#{bean.condition}"}"/>
-        
-        System.out.println(convertToFtl(jsfText2, '$')); // With $ prefix
-        // Output: <h:outputText value="${r"${msg.hello}"}" rendered="${r"${bean.condition}"}"/>
+        String text = "Value1: #{bean.value1}, Value2: ${bean.value2}, Value3: @{bean.value3}";
+
+        // Convert both # and $ expressions
+        String result1 = convertToFtl(text, new char[]{'#', '$'});
+        System.out.println(result1);
+        // Output: Value1: ${r"#{bean.value1}"}, Value2: ${r"${bean.value2}"}, Value3: @{bean.value3}
+
+        // Convert only # expressions
+        String result2 = convertToFtl(text, new char[]{'#'});
+        System.out.println(result2);
+        // Output: Value1: ${r"#{bean.value1}"}, Value2: ${bean.value2}, Value3: @{bean.value3}
+
+        // Test idempotency
+        String doubleConverted = convertToFtl(result1, new char[]{'#', '$'});
+        System.out.println("Same as first conversion? " + result1.equals(doubleConverted));
+        // Output: Same as first conversion? true
     }
 }
