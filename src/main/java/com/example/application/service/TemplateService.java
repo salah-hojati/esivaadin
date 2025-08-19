@@ -51,6 +51,7 @@ public class TemplateService {
         return filePaths;
     }
 
+    @Transactional(readOnly = true)
     public Map<String, String> generateFilesFromDbTemplates(Project project, List<Entity> entities, Set<String> selectedPaths) {
         List<Template> applicableTemplates = findApplicableTemplates(project);
         Map<String, String> generatedFiles = new HashMap<>();
@@ -64,8 +65,22 @@ public class TemplateService {
                 processAndAddFile(generatedFiles, template, project, entities, null, selectedPaths);
             }
         }
+
+        // --- NEW: Add associated project files ---
+        Set<ProjectFile> projectFiles = findApplicableProjectFiles(applicableTemplates);
+        for (ProjectFile file : projectFiles) {
+            String finalPath = project.getName() + "/" + file.getFileName();
+            if (selectedPaths == null || selectedPaths.contains(finalPath)) {
+                // Assuming project files are text-based for this map.
+                // For binary files, a different return type would be needed.
+                generatedFiles.put(finalPath, new String(file.getContent(), StandardCharsets.UTF_8));
+            }
+        }
+
         return generatedFiles;
     }
+
+    @Transactional(readOnly = true)
     public Path generateAndSaveFilesLocally(Project project, List<Entity> entities) throws IOException {
         // 1. Find all applicable templates for the project.
         List<Template> applicableTemplates = findApplicableTemplates(project);
@@ -85,6 +100,16 @@ public class TemplateService {
                 // This is a project-level template (like pom.xml)
                 processAndWriteSingleFile(projectRootPath, template, project, entities, null);
             }
+        }
+
+        // --- NEW: Write associated project files to disk ---
+        Set<ProjectFile> projectFiles = findApplicableProjectFiles(applicableTemplates);
+        for (ProjectFile file : projectFiles) {
+            Path destinationFile = projectRootPath.resolve(file.getFileName());
+            // Ensure parent directories exist
+            Files.createDirectories(destinationFile.getParent());
+            // Write the raw byte content to the file
+            Files.write(destinationFile, file.getContent());
         }
 
         // 4. Return the path to the newly created project directory.
@@ -147,6 +172,17 @@ public class TemplateService {
 
         // 4. Return the unique templates as a list.
         return new ArrayList<>(allTemplates);
+    }
+
+    /**
+     * Helper method to collect all unique ProjectFile entities from a list of templates.
+     * @param templates The list of applicable templates.
+     * @return A Set of unique ProjectFile entities.
+     */
+    private Set<ProjectFile> findApplicableProjectFiles(List<Template> templates) {
+        return templates.stream()
+                .flatMap(template -> template.getProjectFiles().stream())
+                .collect(Collectors.toSet());
     }
 
     //<editor-fold desc="Unchanged Helper Methods">
@@ -234,7 +270,7 @@ public class TemplateService {
         return s.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 
-    private static String capitalize(String s) {
+    public static String capitalize(String s) {
         if (s == null || s.isEmpty()) return s;
         return s.substring(0, 1).toUpperCase() + s.substring(1);
     }

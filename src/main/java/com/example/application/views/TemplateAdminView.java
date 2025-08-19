@@ -2,7 +2,7 @@ package com.example.application.views;
 
 import com.example.application.entity.Template;
 import com.example.application.repository.TemplateRepository;
-import com.example.application.utils.ToFtlConverter;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
@@ -38,7 +38,11 @@ public class TemplateAdminView extends VerticalLayout {
         Button addTemplateButton = new Button("Add New Template", VaadinIcon.PLUS.create());
         addTemplateButton.addClickListener(e -> openTemplateDialog(new Template()));
 
-        add(addTemplateButton);
+      //  add(addTemplateButton);
+        Button uploadTemplateButton = new Button("Upload Template", VaadinIcon.UPLOAD.create());
+        uploadTemplateButton.addClickListener(e -> UI.getCurrent().navigate(TemplateUploadView.class));
+
+        add(new HorizontalLayout(addTemplateButton, uploadTemplateButton));
         configureGrid();
         add(grid);
         refreshGrid();

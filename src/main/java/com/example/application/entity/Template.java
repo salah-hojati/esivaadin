@@ -26,6 +26,11 @@ public class Template {
     @JsonIgnore
     private Set<Framework> frameworks = new HashSet<>();
 
+    // --- NEW: Relationship to ProjectFile ---
+    @ManyToMany(mappedBy = "templates")
+    @JsonIgnore
+    private Set<ProjectFile> projectFiles = new HashSet<>();
+
     //<editor-fold desc="Getters and Setters">
     public Long getId() {
         return id;
@@ -65,6 +70,14 @@ public class Template {
 
     public void setFrameworks(Set<Framework> frameworks) {
         this.frameworks = frameworks;
+    }
+
+    public Set<ProjectFile> getProjectFiles() {
+        return projectFiles;
+    }
+
+    public void setProjectFiles(Set<ProjectFile> projectFiles) {
+        this.projectFiles = projectFiles;
     }
     //</editor-fold>
 
