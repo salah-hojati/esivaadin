@@ -10,25 +10,19 @@ import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.component.upload.Upload;
-import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.data.binder.Binder;
 import com.vaadin.flow.data.binder.ValidationException;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.text.DecimalFormat;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -37,7 +31,7 @@ import java.util.stream.Collectors;
 public class TemplateAdminView extends VerticalLayout {
 
     private final TemplateRepository templateRepository;
-    private final ProjectFileRepository projectFileRepository; // Inject repository for checking existing files
+    private final ProjectFileRepository projectFileRepository;
     private final Grid<Template> grid = new Grid<>(Template.class, false);
     private final Binder<Template> binder = new Binder<>(Template.class);
 
@@ -51,7 +45,6 @@ public class TemplateAdminView extends VerticalLayout {
         Button addTemplateButton = new Button("Add New Template", VaadinIcon.PLUS.create());
         addTemplateButton.addClickListener(e -> openTemplateDialog(new Template()));
 
-        // The "Upload Template" button is now removed from the main view.
         add(addTemplateButton);
         configureGrid();
         add(grid);
@@ -62,9 +55,7 @@ public class TemplateAdminView extends VerticalLayout {
         grid.setSizeFull();
         grid.addColumn(Template::getTemplateName).setHeader("Template Name").setSortable(true).setFlexGrow(1);
         grid.addColumn(Template::getPath).setHeader("Path").setSortable(true).setFlexGrow(1);
-        // Add a column to show the type of template (Text or File)
-        grid.addColumn(template -> (template.getContent() != null && !template.getContent().isBlank()) ? "Text" : "File(s)")
-                .setHeader("Type").setFlexGrow(0);
+        grid.addColumn(this::getTemplateSourceInfo).setHeader("Source").setSortable(true).setFlexGrow(2);
 
         grid.addComponentColumn(template -> {
             Button editButton = new Button("Edit", VaadinIcon.EDIT.create());
@@ -79,6 +70,7 @@ public class TemplateAdminView extends VerticalLayout {
             return deleteButton;
         }).setHeader("Delete").setFlexGrow(0);
     }
+
     private String getTemplateSourceInfo(Template template) {
         if (template.getContent() != null && !template.getContent().isBlank()) {
             return "Text Content";
@@ -91,6 +83,7 @@ public class TemplateAdminView extends VerticalLayout {
         }
         return "Not configured";
     }
+
     private void refreshGrid() {
         grid.setItems(templateRepository.findAll());
     }
@@ -108,21 +101,24 @@ public class TemplateAdminView extends VerticalLayout {
 
         RadioButtonGroup<String> sourceType = new RadioButtonGroup<>();
         sourceType.setLabel("Template Source");
-        sourceType.setItems("Text Content", "File Upload");
+        sourceType.setItems("Text Content", "File-based");
 
         TextArea contentArea = new TextArea("Template Content");
         contentArea.setSizeFull();
 
-        MemoryBuffer buffer = new MemoryBuffer();
-        Upload uploader = new Upload(buffer);
-        uploader.setAcceptedFileTypes(".*"); // Allow any file type
-        Span uploadStatus = new Span("Upload a new file to associate it with this template.");
-
-        VerticalLayout fileLayout = new VerticalLayout(uploader, uploadStatus);
-        fileLayout.setSpacing(false);
-        fileLayout.setPadding(false);
+        // --- NEW: Grid for selecting multiple files ---
+        Grid<ProjectFile> projectFileGrid = new Grid<>(ProjectFile.class, false);
+        projectFileGrid.setSelectionMode(Grid.SelectionMode.MULTI);
+        projectFileGrid.addColumn(ProjectFile::getFileName).setHeader("File Name").setSortable(true);
+        projectFileGrid.addColumn(this::formatFileSize).setHeader("Size").setFlexGrow(0);
+        projectFileGrid.setItems(projectFileRepository.findAll());
+        projectFileGrid.setSizeFull();
 
         // --- LAYOUT AND VISIBILITY LOGIC ---
+        VerticalLayout fileLayout = new VerticalLayout(projectFileGrid);
+        fileLayout.setSizeFull();
+        fileLayout.setPadding(false);
+
         sourceType.addValueChangeListener(e -> {
             boolean isText = "Text Content".equals(e.getValue());
             contentArea.setVisible(isText);
@@ -131,15 +127,12 @@ public class TemplateAdminView extends VerticalLayout {
 
         // --- BINDING AND INITIAL STATE ---
         binder.forField(templateName).asRequired("Template name is required").bind(Template::getTemplateName, Template::setTemplateName);
-        binder.forField(path).bind(Template::getPath, Template::setPath); // Path is not required for file-only templates
+        binder.forField(path).bind(Template::getPath, Template::setPath);
         binder.setBean(template);
 
         if (template.getProjectFiles() != null && !template.getProjectFiles().isEmpty()) {
-            sourceType.setValue("File Upload");
-            String fileNames = template.getProjectFiles().stream()
-                    .map(ProjectFile::getFileName)
-                    .collect(Collectors.joining(", "));
-            uploadStatus.setText("Associated file(s): " + fileNames);
+            sourceType.setValue("File-based");
+            projectFileGrid.getSelectionModel().select(template.getProjectFiles());
         } else {
             sourceType.setValue("Text Content");
             contentArea.setValue(template.getContent() != null ? template.getContent() : "");
@@ -154,24 +147,10 @@ public class TemplateAdminView extends VerticalLayout {
                 if ("Text Content".equals(selectedSource)) {
                     template.setContent(contentArea.getValue());
                     template.getProjectFiles().clear(); // Enforce mutual exclusivity
-                } else { // "File Upload"
+                } else { // "File-based"
                     template.setContent(null); // Enforce mutual exclusivity
-                    if (buffer.getInputStream() != null && buffer.getFileName() != null && !buffer.getFileName().isBlank()) {
-                        // A new file was uploaded
-                        String fileName = buffer.getFileName();
-                        InputStream inputStream = buffer.getInputStream();
-                        byte[] fileBytes = inputStream.readAllBytes();
-
-                        // Check if a file with this name already exists to avoid duplicates
-                        Optional<ProjectFile> existingFileOpt = projectFileRepository.findByFileName(fileName);
-                        ProjectFile fileToAssociate = existingFileOpt.orElseGet(() -> new ProjectFile(fileName, fileBytes));
-                        if (existingFileOpt.isPresent()) {
-                            fileToAssociate.setContent(fileBytes); // Update content if file exists
-                        }
-
-                        template.getProjectFiles().clear(); // Replace existing files with the new one
-                        template.getProjectFiles().add(fileToAssociate);
-                    }
+                    Set<ProjectFile> selectedFiles = projectFileGrid.getSelectedItems();
+                    template.setProjectFiles(new HashSet<>(selectedFiles)); // Update the set
                 }
 
                 templateRepository.save(template);
@@ -181,8 +160,6 @@ public class TemplateAdminView extends VerticalLayout {
 
             } catch (ValidationException ex) {
                 Notification.show("Please correct the highlighted errors.");
-            } catch (IOException ex) {
-                Notification.show("Error reading uploaded file.", 5000, Notification.Position.MIDDLE);
             } catch (Exception ex) {
                 Notification.show("Error saving template: " + ex.getMessage(), 5000, Notification.Position.MIDDLE);
                 ex.printStackTrace();
@@ -193,7 +170,7 @@ public class TemplateAdminView extends VerticalLayout {
 
         VerticalLayout formLayout = new VerticalLayout(templateName, path, sourceType, contentArea, fileLayout);
         formLayout.setSizeFull();
-        formLayout.setFlexGrow(1, contentArea);
+        formLayout.setFlexGrow(1, contentArea, fileLayout);
 
         dialog.add(formLayout);
         dialog.getFooter().add(cancelButton, saveButton);
@@ -221,5 +198,14 @@ public class TemplateAdminView extends VerticalLayout {
         Button cancelButton = new Button("Cancel", e -> confirmDialog.close());
         confirmDialog.getFooter().add(cancelButton, deleteButton);
         confirmDialog.open();
+    }
+
+    private String formatFileSize(ProjectFile file) {
+        if (file.getContent() == null || file.getContent().length == 0) {
+            return "0 B";
+        }
+        final String[] units = new String[]{"B", "KB", "MB", "GB", "TB"};
+        int digitGroups = (int) (Math.log10(file.getContent().length) / Math.log10(1024));
+        return new DecimalFormat("#,##0.#").format(file.getContent().length / Math.pow(1024, digitGroups)) + " " + units[digitGroups];
     }
 }
