@@ -320,8 +320,19 @@ public class MainView extends VerticalLayout {
             Notification.show("Please select a project to download.");
             return;
         }
-        String downloadUrl = "/download/project/" + selectedProject.getId();
-        final Anchor anchor = new Anchor(downloadUrl, "Download");
+      //  String downloadUrl = "/download/project/" + selectedProject.getId();
+      //  final Anchor anchor = new Anchor(downloadUrl, "Download");
+
+        byte[] zipBytes;
+        try {
+            zipBytes = codeGeneratorService.generateAndZipProject(selectedProject, selectedProject.getEntities(),null);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        String fileName = selectedProject.getName() + ".zip";
+
+        StreamResource resource = new StreamResource(fileName, () -> new ByteArrayInputStream(zipBytes));
+        final Anchor anchor = new Anchor(resource, "Download");
         anchor.getElement().setAttribute("download", true);
         anchor.getStyle().set("display", "none");
         add(anchor);

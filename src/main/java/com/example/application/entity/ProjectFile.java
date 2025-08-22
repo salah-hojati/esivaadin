@@ -24,11 +24,11 @@ public class ProjectFile {
     @Column(length = 16777215) // MEDIUMBLOB for MySQL, adjusts for other DBs
     private byte[] content;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "project_file_template",
             joinColumns = @JoinColumn(name = "project_file_id"),
-            inverseJoinColumns = @JoinColumn(name = "template_id")
+            inverseJoinColumns = @JoinColumn(name = "template_id"  )
     )
     private Set<Template> templates = new HashSet<>();
 

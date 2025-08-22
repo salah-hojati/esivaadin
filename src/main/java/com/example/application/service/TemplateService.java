@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption; // Import StandardOpenOption
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,7 +23,6 @@ public class TemplateService {
     private final ProjectTypeRepository projectTypeRepository;
     private final Configuration freemarkerConfig;
 
-    // Constructor simplified: FrameworkRepository is no longer needed here.
     public TemplateService(ProjectTypeRepository projectTypeRepository,
                            Configuration freemarkerConfig) {
         this.projectTypeRepository = projectTypeRepository;
@@ -33,21 +33,29 @@ public class TemplateService {
         List<Template> applicableTemplates = findApplicableTemplates(project);
         List<String> filePaths = new ArrayList<>();
 
+        // Add paths from dynamic templates
         for (Template template : applicableTemplates) {
             try {
-                if (template.getPath().contains("${entity.name}")) {
-                    for (Entity entity : entities) {
-                        Map<String, Object> dataModel = createDataModel(project, entities, entity);
+                if (template.getPath() != null && !template.getPath().isBlank()) {
+                    if (template.getPath().contains("${entity.name}")) {
+                        for (Entity entity : entities) {
+                            Map<String, Object> dataModel = createDataModel(project, entities, entity);
+                            filePaths.add(processString(template.getPath(), dataModel));
+                        }
+                    } else {
+                        Map<String, Object> dataModel = createDataModel(project, entities, null);
                         filePaths.add(processString(template.getPath(), dataModel));
                     }
-                } else {
-                    Map<String, Object> dataModel = createDataModel(project, entities, null);
-                    filePaths.add(processString(template.getPath(), dataModel));
                 }
             } catch (IOException | TemplateException e) {
                 System.err.println("Error processing path for template " + template.getTemplateName() + ": " + e.getMessage());
             }
         }
+
+        // Add paths from static project files
+        Map<String, ProjectFile> projectFileMap = findApplicableProjectFiles(applicableTemplates);
+        filePaths.addAll(projectFileMap.keySet());
+
         return filePaths;
     }
 
@@ -56,24 +64,27 @@ public class TemplateService {
         List<Template> applicableTemplates = findApplicableTemplates(project);
         Map<String, String> generatedFiles = new HashMap<>();
 
+        // Process dynamic templates
         for (Template template : applicableTemplates) {
-            if (template.getPath().contains("${entity.name}")) {
-                for (Entity entity : entities) {
-                    processAndAddFile(generatedFiles, template, project, entities, entity, selectedPaths);
+            if (template.getPath() != null && !template.getPath().isBlank()) {
+                if (template.getPath().contains("${entity.name}")) {
+                    for (Entity entity : entities) {
+                        processAndAddFile(generatedFiles, template, project, entities, entity, selectedPaths);
+                    }
+                } else {
+                    processAndAddFile(generatedFiles, template, project, entities, null, selectedPaths);
                 }
-            } else {
-                processAndAddFile(generatedFiles, template, project, entities, null, selectedPaths);
             }
         }
 
-        // --- NEW: Add associated project files ---
-        Set<ProjectFile> projectFiles = findApplicableProjectFiles(applicableTemplates);
-        for (ProjectFile file : projectFiles) {
-            String finalPath = project.getName() + "/" + file.getFileName();
-            if (selectedPaths == null || selectedPaths.contains(finalPath)) {
-                // Assuming project files are text-based for this map.
-                // For binary files, a different return type would be needed.
-                generatedFiles.put(finalPath, new String(file.getContent(), StandardCharsets.UTF_8));
+        Map<String, ProjectFile> projectFileMap = findApplicableProjectFiles(applicableTemplates);
+        for (Map.Entry<String, ProjectFile> entry : projectFileMap.entrySet()) {
+            String pathInsideProject = entry.getKey();
+            ProjectFile file = entry.getValue();
+            String finalPathForZip = project.getName() + "/" + pathInsideProject;
+
+            if (selectedPaths == null || selectedPaths.contains(pathInsideProject)) {
+                generatedFiles.put(finalPathForZip, new String(file.getContent(), StandardCharsets.UTF_8));
             }
         }
 
@@ -82,121 +93,111 @@ public class TemplateService {
 
     @Transactional(readOnly = true)
     public Path generateAndSaveFilesLocally(Project project, List<Entity> entities) throws IOException {
-        // 1. Find all applicable templates for the project.
         List<Template> applicableTemplates = findApplicableTemplates(project);
-
-        // 2. Define the base output directory. This will be a new folder with the project's name
-        //    in the current working directory (where the JAR is run from).
         Path projectRootPath = Paths.get(System.getProperty("user.dir"), project.getName());
 
-        // 3. Process each template and write the file to disk.
+        // Process and write dynamic templates
         for (Template template : applicableTemplates) {
-            if (template.getPath().contains("${entity.name}")) {
-                // This template needs to be generated for each entity
-                for (Entity entity : entities) {
-                    processAndWriteSingleFile(projectRootPath, template, project, entities, entity);
+            if (template.getPath() != null && !template.getPath().isBlank()) {
+                if (template.getPath().contains("${entity.name}")) {
+                    for (Entity entity : entities) {
+                        processAndWriteSingleFile(projectRootPath, template, project, entities, entity);
+                    }
+                } else {
+                    processAndWriteSingleFile(projectRootPath, template, project, entities, null);
                 }
-            } else {
-                // This is a project-level template (like pom.xml)
-                processAndWriteSingleFile(projectRootPath, template, project, entities, null);
             }
         }
 
-        // --- NEW: Write associated project files to disk ---
-        Set<ProjectFile> projectFiles = findApplicableProjectFiles(applicableTemplates);
-        for (ProjectFile file : projectFiles) {
-            Path destinationFile = projectRootPath.resolve(file.getFileName());
-            // Ensure parent directories exist
-            Files.createDirectories(destinationFile.getParent());
-            // Write the raw byte content to the file
-            Files.write(destinationFile, file.getContent());
+        // Process and write static project files
+        Map<String, ProjectFile> projectFileMap = findApplicableProjectFiles(applicableTemplates);
+        for (Map.Entry<String, ProjectFile> entry : projectFileMap.entrySet()) {
+            String pathInsideProject = entry.getKey();
+            ProjectFile fileContent = entry.getValue();
+            Path destinationFile = projectRootPath.resolve(pathInsideProject);
+
+            // --- FIX: Safely create parent directories ---
+            if (destinationFile.getParent() != null) {
+                Files.createDirectories(destinationFile.getParent());
+            }
+
+            // --- FIX: Write the file, creating it or replacing it if it already exists. ---
+            Files.write(destinationFile, fileContent.getContent(),
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         }
 
-        // 4. Return the path to the newly created project directory.
         return projectRootPath;
     }
 
-    /**
-     * Helper method to process a single template and write it to a file.
-     */
     private void processAndWriteSingleFile(Path projectRootPath, Template template, Project project, List<Entity> allEntities, Entity currentEntity) throws IOException {
         try {
-            // Create the data model for FreeMarker
-            Map<String, Object> dataModel = createDataModel(project, allEntities, currentEntity);
 
-            // Process the path and content with the data model
+            Map<String, Object> dataModel = createDataModel(project, allEntities, currentEntity);
             String finalPath = processString(template.getPath(), dataModel);
             String finalContent = processString(template.getContent(), dataModel);
-
-            // Construct the full, absolute path for the new file
             Path destinationFile = projectRootPath.resolve(finalPath);
+//todo ...
+            // --- FIX: Safely create parent directories ---
+            if (template.getProjectFiles() == null || template.getProjectFiles().isEmpty()) {
+                Files.createDirectories(destinationFile.getParent());
+                // --- FIX: Write the file, creating it or replacing it if it already exists. ---
+                Files.writeString(destinationFile, finalContent, StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }else{
+             System.out.println("****");
+            }
 
-            // Ensure the parent directories exist (e.g., src/main/java/com/example)
-            Files.createDirectories(destinationFile.getParent());
 
-            // Write the final content to the file
-            Files.writeString(destinationFile, finalContent, StandardCharsets.UTF_8);
-
-        } catch (TemplateException e) {
-            // Wrap FreeMarker exception in an IOException for simpler error handling
+        } catch (Exception e) {
+            System.out.println("**");
             throw new IOException("Failed to process template: " + template.getTemplateName(), e);
         }
     }
 
-    /**
-     * --- REWRITTEN: Implements the new logic for finding templates. ---
-     * This method is transactional to ensure lazy-loaded collections can be accessed.
-     */
     @Transactional(readOnly = true)
-    private List<Template> findApplicableTemplates(Project project) {
+    protected List<Template> findApplicableTemplates(Project project) {
         String projectTypeName = project.getProjectType();
         if (projectTypeName == null || projectTypeName.isBlank()) {
             return Collections.emptyList();
         }
-
-        // 1. Find the ProjectType entity from the repository.
         Optional<ProjectType> projectTypeOpt = projectTypeRepository.findByName(projectTypeName);
-
         if (projectTypeOpt.isEmpty()) {
             return Collections.emptyList();
         }
-
-        // 2. Get the set of associated frameworks from the ProjectType.
         Set<Framework> frameworks = projectTypeOpt.get().getFrameworks();
-
-        // 3. For each framework, get its templates. Collect them into a single Set
-        //    to automatically handle duplicates (in case a template is linked to multiple frameworks).
-        Set<Template> allTemplates = frameworks.stream()
+        return frameworks.stream()
                 .flatMap(framework -> framework.getTemplates().stream())
-                .collect(Collectors.toSet());
-
-        // 4. Return the unique templates as a list.
-        return new ArrayList<>(allTemplates);
+                .distinct()
+                .collect(Collectors.toList());
     }
 
-    /**
-     * Helper method to collect all unique ProjectFile entities from a list of templates.
-     * @param templates The list of applicable templates.
-     * @return A Set of unique ProjectFile entities.
-     */
-    private Set<ProjectFile> findApplicableProjectFiles(List<Template> templates) {
-        return templates.stream()
-                .flatMap(template -> template.getProjectFiles().stream())
-                .collect(Collectors.toSet());
+    private Map<String, ProjectFile> findApplicableProjectFiles(List<Template> templates) {
+        Map<String, ProjectFile> fileMap = new HashMap<>();
+        for (Template template : templates) {
+       //     if (template.getProjectFiles() == null || template.getProjectFiles().isEmpty()) {
+            if (template.getProjectFiles() != null && !template.getProjectFiles().isEmpty()) {
+                String basePath = template.getPath() != null ? template.getPath() : "";
+                for (ProjectFile projectFile : template.getProjectFiles()) {
+                    String fullPath = Paths.get(basePath, projectFile.getFileName()).toString().replace('\\', '/');
+                    fileMap.putIfAbsent(fullPath, projectFile);
+                }
+            }
+        }
+        return fileMap;
     }
 
-    //<editor-fold desc="Unchanged Helper Methods">
     private void processAndAddFile(Map<String, String> generatedFiles, Template template, Project project, List<Entity> allEntities, Entity currentEntity, Set<String> selectedPaths) {
         try {
             Map<String, Object> dataModel = createDataModel(project, allEntities, currentEntity);
             String finalPath = processString(template.getPath(), dataModel);
+            String finalPathForZip = project.getName() + "/" + finalPath;
 
             if (selectedPaths != null && !selectedPaths.contains(finalPath)) {
-                return; // Skip this file
+                return;
             }
 
             String finalContent = processString(template.getContent(), dataModel);
-            generatedFiles.put(project.getName() + "/" + finalPath, finalContent);
+            generatedFiles.put(finalPathForZip, finalContent);
         } catch (IOException | TemplateException e) {
             System.err.println("Error processing template " + template.getTemplateName() + ": " + e.getMessage());
             e.printStackTrace();
@@ -216,6 +217,14 @@ public class TemplateService {
         dataModel.put("entities", allEntities);
         dataModel.put("springBootVersion", "3.3.0");
         dataModel.put("vaadinVersion", "24.3.12");
+        dataModel.put("javaVersion", "17");
+
+        projectTypeRepository.findByName(project.getProjectType()).ifPresent(pt -> {
+            Set<String> frameworkNames = pt.getFrameworks().stream()
+                    .map(Framework::getName)
+                    .collect(Collectors.toSet());
+            dataModel.put("frameworks", frameworkNames);
+        });
 
         if (currentEntity != null) {
             dataModel.put("entity", currentEntity);
@@ -229,6 +238,7 @@ public class TemplateService {
         return dataModel;
     }
 
+    //<editor-fold desc="Unchanged Helper Methods">
     public static class FieldTemplateModel {
         private final String type;
         private final String camelCaseName;
@@ -248,11 +258,26 @@ public class TemplateService {
                 this.type = field.getType();
             }
         }
-        public String getType() { return type; }
-        public String getCamelCaseName() { return camelCaseName; }
-        public String getCapitalizedName() { return capitalizedName; }
-        public String getSnakeCaseName() { return snakeCaseName; }
-        public String getRelationship() { return relationship; }
+
+        public String getType() {
+            return type;
+        }
+
+        public String getCamelCaseName() {
+            return camelCaseName;
+        }
+
+        public String getCapitalizedName() {
+            return capitalizedName;
+        }
+
+        public String getSnakeCaseName() {
+            return snakeCaseName;
+        }
+
+        public String getRelationship() {
+            return relationship;
+        }
     }
 
     private static String toCamelCase(String s) {
@@ -274,7 +299,5 @@ public class TemplateService {
         if (s == null || s.isEmpty()) return s;
         return s.substring(0, 1).toUpperCase() + s.substring(1);
     }
-
-
     //</editor-fold>
 }

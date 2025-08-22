@@ -27,7 +27,7 @@ public class Template {
     private Set<Framework> frameworks = new HashSet<>();
 
     // --- NEW: Relationship to ProjectFile ---
-    @ManyToMany(mappedBy = "templates")
+    @ManyToMany(mappedBy = "templates",fetch = FetchType.EAGER)
     @JsonIgnore
     private Set<ProjectFile> projectFiles = new HashSet<>();
 
