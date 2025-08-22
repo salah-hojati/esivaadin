@@ -132,7 +132,16 @@ public class TemplateAdminView extends VerticalLayout {
 
         if (template.getProjectFiles() != null && !template.getProjectFiles().isEmpty()) {
             sourceType.setValue("File-based");
-            projectFileGrid.getSelectionModel().select(template.getProjectFiles());
+
+
+
+            if(template.getProjectFiles() !=null){
+                template.getProjectFiles().forEach(
+                        projectFile -> {projectFileGrid.getSelectionModel().select(projectFile);
+                        }
+                );
+            }
+         //   projectFileGrid.getSelectionModel().select(template.getProjectFiles());
         } else {
             sourceType.setValue("Text Content");
             contentArea.setValue(template.getContent() != null ? template.getContent() : "");

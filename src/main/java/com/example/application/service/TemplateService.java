@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption; // Import StandardOpenOption
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -36,7 +36,7 @@ public class TemplateService {
         // Add paths from dynamic templates
         for (Template template : applicableTemplates) {
             try {
-                if (template.getPath() != null && !template.getPath().isBlank()) {
+                if (template.getPath() != null && !template.getPath().isBlank() && template.getContent() != null) {
                     if (template.getPath().contains("${entity.name}")) {
                         for (Entity entity : entities) {
                             Map<String, Object> dataModel = createDataModel(project, entities, entity);
@@ -66,7 +66,7 @@ public class TemplateService {
 
         // Process dynamic templates
         for (Template template : applicableTemplates) {
-            if (template.getPath() != null && !template.getPath().isBlank()) {
+            if (template.getPath() != null && !template.getPath().isBlank() && template.getContent() != null) {
                 if (template.getPath().contains("${entity.name}")) {
                     for (Entity entity : entities) {
                         processAndAddFile(generatedFiles, template, project, entities, entity, selectedPaths);
@@ -98,7 +98,8 @@ public class TemplateService {
 
         // Process and write dynamic templates
         for (Template template : applicableTemplates) {
-            if (template.getPath() != null && !template.getPath().isBlank()) {
+            // A dynamic template must have both a path and content.
+            if (template.getPath() != null && !template.getPath().isBlank() && template.getContent() != null) {
                 if (template.getPath().contains("${entity.name}")) {
                     for (Entity entity : entities) {
                         processAndWriteSingleFile(projectRootPath, template, project, entities, entity);
@@ -116,12 +117,9 @@ public class TemplateService {
             ProjectFile fileContent = entry.getValue();
             Path destinationFile = projectRootPath.resolve(pathInsideProject);
 
-            // --- FIX: Safely create parent directories ---
             if (destinationFile.getParent() != null) {
                 Files.createDirectories(destinationFile.getParent());
             }
-
-            // --- FIX: Write the file, creating it or replacing it if it already exists. ---
             Files.write(destinationFile, fileContent.getContent(),
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         }
@@ -129,27 +127,25 @@ public class TemplateService {
         return projectRootPath;
     }
 
+    /**
+     * --- CORRECTED ---
+     * This helper method now correctly processes and writes a single dynamic template file
+     * without the flawed logic that checked for associated project files.
+     */
     private void processAndWriteSingleFile(Path projectRootPath, Template template, Project project, List<Entity> allEntities, Entity currentEntity) throws IOException {
         try {
-
             Map<String, Object> dataModel = createDataModel(project, allEntities, currentEntity);
             String finalPath = processString(template.getPath(), dataModel);
             String finalContent = processString(template.getContent(), dataModel);
             Path destinationFile = projectRootPath.resolve(finalPath);
-//todo ...
-            // --- FIX: Safely create parent directories ---
-            if (template.getProjectFiles() == null || template.getProjectFiles().isEmpty()) {
+
+            if (destinationFile.getParent() != null) {
                 Files.createDirectories(destinationFile.getParent());
-                // --- FIX: Write the file, creating it or replacing it if it already exists. ---
-                Files.writeString(destinationFile, finalContent, StandardCharsets.UTF_8,
-                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            }else{
-             System.out.println("****");
             }
+            Files.writeString(destinationFile, finalContent, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
-
-        } catch (Exception e) {
-            System.out.println("**");
+        } catch (TemplateException e) {
             throw new IOException("Failed to process template: " + template.getTemplateName(), e);
         }
     }
@@ -174,7 +170,6 @@ public class TemplateService {
     private Map<String, ProjectFile> findApplicableProjectFiles(List<Template> templates) {
         Map<String, ProjectFile> fileMap = new HashMap<>();
         for (Template template : templates) {
-       //     if (template.getProjectFiles() == null || template.getProjectFiles().isEmpty()) {
             if (template.getProjectFiles() != null && !template.getProjectFiles().isEmpty()) {
                 String basePath = template.getPath() != null ? template.getPath() : "";
                 for (ProjectFile projectFile : template.getProjectFiles()) {
