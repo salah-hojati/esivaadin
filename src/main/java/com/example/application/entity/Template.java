@@ -27,10 +27,15 @@ public class Template {
     private Set<Framework> frameworks = new HashSet<>();
 
     // --- NEW: Relationship to ProjectFile ---
-    @ManyToMany(mappedBy = "templates",fetch = FetchType.EAGER)
-    @JsonIgnore
-    private Set<ProjectFile> projectFiles = new HashSet<>();
 
+    // --- CORRECTED: Template is now the owner of the relationship ---
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "template_project_file",
+            joinColumns = @JoinColumn(name = "template_id"),
+            inverseJoinColumns = @JoinColumn(name = "project_file_id")
+    )
+    private Set<ProjectFile> projectFiles = new HashSet<>();
     //<editor-fold desc="Getters and Setters">
     public Long getId() {
         return id;

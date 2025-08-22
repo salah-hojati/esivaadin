@@ -32,6 +32,14 @@ public class ProjectFile {
     )
     private Set<Template> templates = new HashSet<>();
 
+    public ProjectFile(String fileName, byte[] content) {
+        this.fileName=fileName;
+        this.content=content;
+    }
+
+    public ProjectFile() {
+    }
+
     //<editor-fold desc="Getters and Setters">
     public Long getId() {
         return id;

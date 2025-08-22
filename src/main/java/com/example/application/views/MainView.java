@@ -70,6 +70,7 @@ public class MainView extends VerticalLayout {
         updateUIState();
     }
 
+
     private void createAdminMenu() {
         HorizontalLayout menu = new HorizontalLayout();
         menu.setSpacing(true);
@@ -77,7 +78,11 @@ public class MainView extends VerticalLayout {
         Button projectTypesButton = new Button("Manage Project Types", e -> UI.getCurrent().navigate(ProjectTypeAdminView.class));
         Button frameworksButton = new Button("Manage Frameworks", e -> UI.getCurrent().navigate(FrameworkAdminView.class));
         Button templatesButton = new Button("Manage Templates", e -> UI.getCurrent().navigate(TemplateAdminView.class));
-        menu.add(projectTypesButton, frameworksButton, templatesButton);
+
+        // --- NEW: Add button to navigate to the Project File management view ---
+        Button projectFilesButton = new Button("Manage Project Files", e -> UI.getCurrent().navigate(ProjectFileAdminView.class));
+
+        menu.add(projectTypesButton, frameworksButton, templatesButton, projectFilesButton);
         add(menu);
     }
 
