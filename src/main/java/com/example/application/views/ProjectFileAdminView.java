@@ -25,7 +25,7 @@ import java.text.DecimalFormat;
 
 @Route("admin/project-files")
 @PermitAll
-public class ProjectFileAdminView extends VerticalLayout {
+public class ProjectFileAdminView extends AbstractAdminView {
 
     private final ProjectFileRepository projectFileRepository;
     private final Grid<ProjectFile> grid = new Grid<>(ProjectFile.class, false);

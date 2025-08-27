@@ -24,7 +24,7 @@ import java.util.List;
 @Route("admin/upload-file")
 @PageTitle("Upload File")
 @PermitAll
-public class ProjectFileUploadView extends VerticalLayout {
+public class ProjectFileUploadView extends AbstractAdminView {
 
     private final ProjectFileRepository projectFileRepository;
 

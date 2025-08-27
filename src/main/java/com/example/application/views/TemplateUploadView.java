@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets;
 @Route("admin/upload-template")
 @PageTitle("Upload Template")
 @PermitAll
-public class TemplateUploadView extends VerticalLayout {
+public class TemplateUploadView extends AbstractAdminView {
 
     private final TemplateRepository templateRepository;
 

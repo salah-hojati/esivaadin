@@ -210,10 +210,11 @@ public class TemplateService {
         Map<String, Object> dataModel = new HashMap<>();
         dataModel.put("project", project);
         dataModel.put("entities", allEntities);
-        dataModel.put("springBootVersion", "3.3.0");
-        dataModel.put("vaadinVersion", "24.3.12");
-        dataModel.put("javaVersion", "17");
 
+        // Load configuration properties from the project entity
+        project.getConfigurationProperties().forEach(prop ->
+                dataModel.put(toCamelCase(prop.getPropertyKey()), prop.getPropertyValue())
+        );
         projectTypeRepository.findByName(project.getProjectType()).ifPresent(pt -> {
             Set<String> frameworkNames = pt.getFrameworks().stream()
                     .map(Framework::getName)

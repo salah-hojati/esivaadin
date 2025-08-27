@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 
 @Route("admin/templates")
 @PermitAll
-public class TemplateAdminView extends VerticalLayout {
+public class TemplateAdminView extends AbstractAdminView {
 
     private final TemplateRepository templateRepository;
     private final ProjectFileRepository projectFileRepository;

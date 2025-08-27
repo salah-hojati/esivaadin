@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Route("admin/project-types")
-public class ProjectTypeAdminView extends VerticalLayout {
+public class ProjectTypeAdminView extends AbstractAdminView {
 
     private final ProjectTypeRepository projectTypeRepository;
     private final FrameworkRepository frameworkRepository;

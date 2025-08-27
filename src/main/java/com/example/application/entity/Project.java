@@ -21,6 +21,9 @@ public class Project {
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Entity> entities = new ArrayList<>();
 
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    private List<ConfigurationProperty> configurationProperties = new ArrayList<>();
+
     public Project() {
     }
 
@@ -57,6 +60,14 @@ public class Project {
 
     public void setEntities(List<Entity> entities) {
         this.entities = entities;
+    }
+
+    public List<ConfigurationProperty> getConfigurationProperties() {
+        return configurationProperties;
+    }
+
+    public void setConfigurationProperties(List<ConfigurationProperty> configurationProperties) {
+        this.configurationProperties = configurationProperties;
     }
     //</editor-fold>
 

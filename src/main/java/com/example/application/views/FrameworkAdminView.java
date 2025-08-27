@@ -20,7 +20,7 @@ import java.util.Set;
 
 @Route("admin/frameworks")
 @PermitAll
-public class FrameworkAdminView extends VerticalLayout {
+public class FrameworkAdminView extends AbstractAdminView {
 
     private final FrameworkRepository frameworkRepository;
     private final TemplateRepository templateRepository;

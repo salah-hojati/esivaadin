@@ -43,6 +43,7 @@ public class MainView extends VerticalLayout {
     private Button showGeneratedFilesButton;
     private Button addEntityButton;
     private Grid<EntityModel> entityGrid;
+    private Button managePropertiesButton;
     private final EntityRepository entityRepository;
     private final ProjectRepository projectRepository;
     private final ProjectTypeRepository projectTypeRepository;
@@ -112,8 +113,9 @@ public class MainView extends VerticalLayout {
         selectAndGenerateButton = new Button("Select Files & Generate...", e -> openFileSelectionDialog());
         showGeneratedFilesButton = new Button("Show Generated Files", e -> showGeneratedFilesInNewTab());
         generateLocallyButton = new Button("Generate Locally", e -> generateFilesLocally()); // NEW
+        managePropertiesButton = new Button("Manage Properties", e -> openPropertiesDialog());
         newProjectButton = new Button("New Project", e -> projectSelector.clear());
-        HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, selectAndGenerateButton, showGeneratedFilesButton, generateLocallyButton, newProjectButton);
+        HorizontalLayout buttonLayout = new HorizontalLayout(saveProjectButton, downloadProjectButton, selectAndGenerateButton, showGeneratedFilesButton, generateLocallyButton, managePropertiesButton, newProjectButton);
         add(projectSelector, projectDetailsLayout, buttonLayout);
     }
 
@@ -386,9 +388,113 @@ public class MainView extends VerticalLayout {
         selectAndGenerateButton.setEnabled(projectSelected);
         showGeneratedFilesButton.setEnabled(projectSelected);
         generateLocallyButton.setEnabled(projectSelected);
+        managePropertiesButton.setEnabled(projectSelected);
         newProjectButton.setEnabled(projectSelected);
         saveProjectButton.setEnabled(true);
     }
+
+    private void openPropertiesDialog() {
+        Project selectedProject = projectSelector.getValue();
+        if (selectedProject == null) {
+            Notification.show("Please select a project first.");
+            return;
+        }
+
+        Dialog dialog = new Dialog();
+        dialog.setHeaderTitle("Manage Configuration Properties for: " + selectedProject.getName());
+        dialog.setWidth("50vw");
+
+        Grid<ConfigurationProperty> propertiesGrid = new Grid<>();
+        propertiesGrid.addColumn(ConfigurationProperty::getPropertyKey).setHeader("Key").setSortable(true);
+        propertiesGrid.addColumn(ConfigurationProperty::getPropertyValue).setHeader("Value");
+
+        propertiesGrid.setItems(selectedProject.getConfigurationProperties());
+
+        propertiesGrid.addComponentColumn(prop -> new Button("Edit", e -> openPropertyEditDialog(selectedProject, prop, propertiesGrid))).setHeader("Edit").setFlexGrow(0);
+
+        propertiesGrid.addComponentColumn(prop -> {
+            Button removeButton = new Button("Remove", e -> {
+                Project currentProject = projectSelector.getValue();
+                // The 'prop' object is from the grid, which might be from a stale project instance.
+                // We must remove the property from the currentProject's list based on its ID.
+                boolean removed = currentProject.getConfigurationProperties().removeIf(p -> p.getId().equals(prop.getId()));
+
+                if (removed) {
+                    Project savedProject = projectRepository.save(currentProject);
+                    projectSelector.setValue(savedProject); // Update the main selector with the new state
+                    Notification.show("Property '" + prop.getPropertyKey() + "' removed.");
+                    propertiesGrid.setItems(savedProject.getConfigurationProperties()); // Refresh grid from the new instance
+                } else {
+                    Notification.show("Error: Could not find the property to remove.");
+                }
+            });
+            removeButton.getStyle().set("color", "var(--lumo-error-text-color)");
+            return removeButton;
+        }).setHeader("Remove").setFlexGrow(0);
+
+        Button addPropertyButton = new Button("Add Property", e -> openPropertyEditDialog(selectedProject, null, propertiesGrid));
+        dialog.getFooter().add(addPropertyButton, new Button("Close", e -> dialog.close()));
+        dialog.add(propertiesGrid);
+        dialog.open();
+    }
+
+    private void openPropertyEditDialog(Project project, ConfigurationProperty property, Grid<ConfigurationProperty> grid) {
+        boolean isEditing = property != null;
+        Dialog editDialog = new Dialog();
+        editDialog.setHeaderTitle(isEditing ? "Edit Property" : "Add New Property");
+
+        TextField keyField = new TextField("Property Key");
+        TextField valueField = new TextField("Property Value");
+
+        if (isEditing) {
+            keyField.setValue(property.getPropertyKey());
+            valueField.setValue(property.getPropertyValue());
+            keyField.setReadOnly(true);
+        }
+
+        Button saveButton = new Button("Save", e -> {
+            String key = keyField.getValue().trim();
+            if (key.isEmpty()) {
+                Notification.show("Property key cannot be empty.");
+                return;
+            }
+
+            // Always get the latest project instance from the selector before modifying.
+            Project currentProject = projectSelector.getValue();
+
+            if (isEditing) {
+                // Find the matching property in the fresh project instance and update it.
+                // This avoids issues with stale 'property' objects.
+                currentProject.getConfigurationProperties().stream()
+                        .filter(p -> p.getId().equals(property.getId()))
+                        .findFirst()
+                        .ifPresent(p -> p.setPropertyValue(valueField.getValue()));
+            } else {
+                if (currentProject.getConfigurationProperties().stream().anyMatch(p -> p.getPropertyKey().equalsIgnoreCase(key))) {
+                    Notification.show("A property with this key already exists.");
+                    return;
+                }
+                ConfigurationProperty newProp = new ConfigurationProperty(key, valueField.getValue());
+                newProp.setProject(currentProject);
+                currentProject.getConfigurationProperties().add(newProp);
+            }
+
+            // Save the project and get the managed instance returned by the repository.
+            Project savedProject = projectRepository.save(currentProject);
+            // Update the main project selector to hold the latest state.
+            projectSelector.setValue(savedProject);
+
+            Notification.show("Property saved.");
+            editDialog.close();
+            // Refresh the grid with the data from the truly saved, managed instance.
+            grid.setItems(savedProject.getConfigurationProperties());
+        });
+
+        editDialog.getFooter().add(new Button("Cancel", e -> editDialog.close()), saveButton);
+        editDialog.add(keyField, valueField);
+        editDialog.open();
+    }
+
     /**
      * NEW METHOD: Handles the click event for the "Generate Locally" button.
      */
