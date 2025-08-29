@@ -374,7 +374,7 @@ public class MainView extends VerticalLayout {
 
     private EntityModel convertToEntityModel(Entity entity) {
         List<FieldModel> fieldModels = entity.getFields().stream()
-                .map(field -> new FieldModel(field.getId(), field.getName(), field.getType(), field.isRequired(), field.getRelationshipType()))
+                .map(field -> new FieldModel(field.getId(), field.getName(), field.getType(), field.isRequired(), field.getRelationshipType(),field.getRegularExpression(),field.getLabel()))
                 .collect(Collectors.toList());
         EntityModel model = new EntityModel(entity.getName(), fieldModels);
         model.setId(entity.getId());
@@ -590,6 +590,15 @@ public class MainView extends VerticalLayout {
         Checkbox required = new Checkbox("Required", fieldModel.isRequired());
         required.setReadOnly(true);
 
+        // ADDED: Display the label and regular expression
+        TextField labelField = new TextField("Label");
+        labelField.setValue(fieldModel.getLabel()==null ?"":fieldModel.getLabel());
+        labelField.setReadOnly(true);
+
+        TextField regularExpressionField = new TextField("Regular Expression");
+        regularExpressionField.setValue(fieldModel.getRegularExpression()==null ? "":fieldModel.getRegularExpression());
+        regularExpressionField.setReadOnly(true);
+
         Button removeFieldButton = new Button("X", e -> {
             if (fieldModel.getId() != null && entityModel != null && entityModel.getId() != null) {
                 entityRepository.findByIdWithFields(entityModel.getId()).ifPresent(entity -> {
@@ -606,7 +615,7 @@ public class MainView extends VerticalLayout {
         removeFieldButton.getStyle().set("color", "var(--lumo-error-text-color)");
         removeFieldButton.setTooltipText("Remove field");
 
-        fieldRow.add(idField, name, type, relationship, required, removeFieldButton);
+        fieldRow.add(idField, name, type, relationship, required, removeFieldButton,labelField,regularExpressionField);
         layout.add(fieldRow);
     }
 
@@ -614,6 +623,8 @@ public class MainView extends VerticalLayout {
         return new Button("Add Field", e -> {
             Dialog fieldDialog = new Dialog();
             TextField fieldName = new TextField("Field Name");
+            TextField fieldlabel = new TextField("label");
+            TextField fieldregularExpression = new TextField("regularExpression");
             ComboBox<String> fieldType = new ComboBox<>("Type");
             Checkbox required = new Checkbox("Required");
 
@@ -650,7 +661,7 @@ public class MainView extends VerticalLayout {
             Button saveFieldBtn = new Button("Save", ev -> {
                 if (!fieldName.isEmpty() && fieldType.getValue() != null) {
                     String relationship = relationshipSelector.getValue();
-                    FieldModel newField = new FieldModel(null, fieldName.getValue(), fieldType.getValue(), required.getValue(), relationship);
+                    FieldModel newField = new FieldModel(null, fieldName.getValue(), fieldType.getValue(), required.getValue(), relationship,fieldregularExpression.getValue(),fieldlabel.getValue());
                     tempFieldModels.add(newField);
                     renderFieldRow(newField, fieldsLayout, tempFieldModels, entityToEdit);
                     fieldDialog.close();
@@ -659,7 +670,7 @@ public class MainView extends VerticalLayout {
                 }
             });
 
-            fieldDialog.add(fieldName, fieldType, relationshipSelector, required, saveFieldBtn);
+            fieldDialog.add(fieldName, fieldType, relationshipSelector, required, saveFieldBtn,fieldlabel,fieldregularExpression);
             fieldDialog.open();
         });
     }
@@ -679,7 +690,7 @@ public class MainView extends VerticalLayout {
                     tempFieldModels.stream()
                             .filter(fm -> fm.getId() == null)
                             .forEach(newFieldModel -> {
-                                Field newField = new Field(newFieldModel.getName(), newFieldModel.getType(), newFieldModel.isRequired(), newFieldModel.getRelationshipType());
+                                Field newField = new Field(newFieldModel.getName(), newFieldModel.getType(), newFieldModel.isRequired(), newFieldModel.getRelationshipType(),newFieldModel.getRegularExpression(),newFieldModel.getLabel());
                                 existingEntity.getFields().add(newField);
                             });
 
@@ -688,7 +699,7 @@ public class MainView extends VerticalLayout {
                 });
             } else {
                 List<Field> fieldList = tempFieldModels.stream()
-                        .map(fm -> new Field(fm.getName(), fm.getType(), fm.isRequired(), fm.getRelationshipType()))
+                        .map(fm -> new Field(fm.getName(), fm.getType(), fm.isRequired(), fm.getRelationshipType(),fm.getRegularExpression(),fm.getLabel()))
                         .collect(Collectors.toList());
                 Entity newEntity = new Entity(entityName, fieldList);
                 newEntity.setProject(selectedProject);

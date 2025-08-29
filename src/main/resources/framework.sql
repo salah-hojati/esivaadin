@@ -1,0 +1,12 @@
+INSERT INTO productdb.framework (id, name) VALUES (7, 'JAX-RS-jee');
+INSERT INTO productdb.framework (id, name) VALUES (14, 'job-jee');
+INSERT INTO productdb.framework (id, name) VALUES (4, 'JSF');
+INSERT INTO productdb.framework (id, name) VALUES (22, 'pic(job)');
+INSERT INTO productdb.framework (id, name) VALUES (8, 'PrimeFaces');
+INSERT INTO productdb.framework (id, name) VALUES (5, 'React');
+INSERT INTO productdb.framework (id, name) VALUES (6, 'Spring Batch');
+INSERT INTO productdb.framework (id, name) VALUES (3, 'Spring MVC');
+INSERT INTO productdb.framework (id, name) VALUES (2, 'Spring Rest');
+INSERT INTO productdb.framework (id, name) VALUES (9, 'Struts');
+INSERT INTO productdb.framework (id, name) VALUES (1, 'Vaadin');
+INSERT INTO productdb.framework (id, name) VALUES (26, 'weblogic_install');

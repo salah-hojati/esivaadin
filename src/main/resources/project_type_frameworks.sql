@@ -1,0 +1,15 @@
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (1, 1);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (2, 1);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (2, 2);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (7, 2);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (1, 3);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (1, 4);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (1, 5);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (3, 6);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (2, 7);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (5, 7);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (1, 8);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (1, 9);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (6, 14);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (6, 22);
+INSERT INTO productdb.project_type_frameworks (project_type_id, framework_id) VALUES (8, 26);

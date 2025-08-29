@@ -14,24 +14,34 @@ public class Field {
     private String name;
     private String type;
     private boolean required;
-    private String relationshipType; // New field to store relationship
+    private String relationshipType;
+    private String regularExpression;
+    private String label;
 
     public Field() {
     }
 
-    // Existing constructor
-    public Field(String name, String type, boolean required) {
+/*    public Field(String name, String type, boolean required) {
         this.name = name;
         this.type = type;
         this.required = required;
-    }
+    }*/
 
-    // New constructor with relationship
-    public Field(String name, String type, boolean required, String relationshipType) {
+    /*public Field(String name, String type, boolean required, String relationshipType) {
         this.name = name;
         this.type = type;
         this.required = required;
         this.relationshipType = relationshipType;
+    }*/
+
+    // New constructor including regularExpression and label
+    public Field(String name, String type, boolean required, String relationshipType, String regularExpression, String label) {
+        this.name = name;
+        this.type = type;
+        this.required = required;
+        this.relationshipType = relationshipType;
+        this.regularExpression = regularExpression;
+        this.label = label;
     }
 
     //<editor-fold desc="Getters and Setters">
@@ -70,5 +80,26 @@ public class Field {
     public void setRelationshipType(String relationshipType) {
         this.relationshipType = relationshipType;
     }
+
+    public String getRegularExpression() {
+        return regularExpression;
+    }
+
+    public void setRegularExpression(String regularExpression) {
+        this.regularExpression = regularExpression;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
+    public void setLabel(String label) {
+        this.label = label;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     //</editor-fold>
 }
