@@ -3,32 +3,32 @@ package com.example.application.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.core.io.ResourceLoader;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.init.ScriptUtils;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.io.IOException;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.Comparator;
 
-public class DataSeeder {
+public class DataSeeder2 {
 
-    private static final Logger logger = LoggerFactory.getLogger(DataSeeder.class);
+    private static final Logger logger = LoggerFactory.getLogger(DataSeeder2.class);
 
     public static void main(String[] args) {
         // Database connection details
-        String jdbcUrl = "jdbc:mysql://127.0.0.1:3306/productdb?useSSL=false&allowPublicKeyRetrieval=true";
-        String username = "root";
-        String password = "1234";
+
+        String jdbcUrl = "jdbc:h2:file:./data/productdb";
+        String username = "";
+        String password = "";
 
         // Create a DataSource
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver"); // Ensure you have the correct driver class name
+        dataSource.setDriverClassName("org.h2.Driver"); // Ensure you have the correct driver class name
         dataSource.setUrl(jdbcUrl);
         dataSource.setUsername(username);
         dataSource.setPassword(password);
@@ -70,11 +70,11 @@ public class DataSeeder {
                             if (line.isEmpty() || line.startsWith("--")) {
                                 continue; // Skip comments and empty lines
                             }
-                            sqlStatement.append(line).append("\n");
+                            sqlStatement.append(line);
                             if (line.endsWith(";")) {
                                 String executableStatement = sqlStatement.toString();
                                 try {
-                                    statement.execute(executableStatement);
+                                    statement.execute(executableStatement.replace("productdb.",""));
                                     logger.info("Executed SQL: " + executableStatement);
                                 } catch (SQLException e) {
                                     logger.error("Error executing SQL: " + executableStatement, e);
