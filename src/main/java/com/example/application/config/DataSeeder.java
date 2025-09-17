@@ -22,9 +22,9 @@ public class DataSeeder {
 
     public static void main(String[] args) {
         // Database connection details
-        String jdbcUrl = "jdbc:mysql://127.0.0.1:3306/productdb?useSSL=false&allowPublicKeyRetrieval=true";
-        String username = "root";
-        String password = "1234";
+        String jdbcUrl = "jdbc:mysql://127.0.0.1:3307/productdb?useSSL=false&allowPublicKeyRetrieval=true";
+        String username = "appuser";
+        String password = "apppassword";
 
         // Create a DataSource
         DriverManagerDataSource dataSource = new DriverManagerDataSource();

@@ -7,3 +7,6 @@ http://localhost:8088/h2-console
 Configure the ConnectionYou will see a login page. This is the most important step. You must change the JDBC URL to match the one in your application.properties file exactly.Fill in the fields like this:•Driver Class: org.h2.Driver•JDBC URL: jdbc:h2:file:./data/testdb  (This must match your properties file)•User Name: sa•Password: (leave this blank)
 
 mvn clean package -Pproduction
+
+
+ docker exec mysql sh -c 'exec mysqldump productdb --no-create-info --skip-triggers --skip-comments --skip-opt --complete-insert -uroot -ppassword' > productdb-pure-inserts.sql
